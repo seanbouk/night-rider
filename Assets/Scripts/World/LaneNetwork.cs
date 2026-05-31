@@ -104,8 +104,10 @@ namespace NightRider.World
                     for (int i = 0; i <= n; i++)
                     {
                         float tA = i / (float)n;
-                        a.EvaluateWorld(tA, out var posA, out var fwdA, out var upA);
-                        Vector3 rightA = Vector3.Cross(upA, fwdA).normalized;
+                        a.EvaluateWorld(tA, out var posA, out var fwdA, out _);
+                        // World up, not the spline's up: flat world, and a
+                        // mirrored/reversed track's up flips (would swap L/R).
+                        Vector3 rightA = Vector3.Cross(Vector3.up, fwdA).normalized;
 
                         float bestLeft = float.MaxValue, bestRight = float.MaxValue;
 

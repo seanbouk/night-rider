@@ -33,11 +33,13 @@ namespace NightRider.World
             up      = ((Vector3)u).normalized;
         }
 
-        /// Rightward direction at t (left is -this).
+        /// Rightward direction at t (left is -this). Uses world up, not the
+        /// spline's own up vector — the world is flat, and a spline's up flips
+        /// when a track is mirrored/reversed, which we must not inherit.
         public Vector3 RightAt(float t)
         {
-            EvaluateWorld(t, out _, out var fwd, out var up);
-            return Vector3.Cross(up, fwd).normalized;
+            EvaluateWorld(t, out _, out var fwd, out _);
+            return Vector3.Cross(Vector3.up, fwd).normalized;
         }
 
         /// Closest point on this lane to a world position; returns its t.

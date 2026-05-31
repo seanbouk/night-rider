@@ -76,8 +76,8 @@ namespace NightRider.World
 
                 Vector3 world   = (Vector3)pos;
                 Vector3 forward = ((Vector3)tan).normalized;
-                Vector3 upv     = ((Vector3)up).normalized;
-                Vector3 right   = Vector3.Cross(upv, forward).normalized;
+                // World up (flat world); a mirrored/reversed spline's own up flips.
+                Vector3 right   = Vector3.Cross(Vector3.up, forward).normalized;
 
                 Vector3 local      = transform.InverseTransformPoint(world);
                 Vector3 localRight = transform.InverseTransformDirection(right);
