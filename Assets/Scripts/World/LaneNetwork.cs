@@ -174,7 +174,9 @@ namespace NightRider.World
                     if (!_bounds.TryGetValue(b, out var bb) || !search.Intersects(bb)) continue; // broad-phase cull
                     if (!natives.TryGetValue(b, out var nb)) continue;
 
-                    float d = SplineUtility.GetNearestPoint(nb, (float3)posA, out float3 nearest, out float tB);
+                    // Low resolution: GetNearestPoint subdivides ~sqrt(length)*resolution,
+                    // and our sampleSpacing already bounds the real precision we need.
+                    float d = SplineUtility.GetNearestPoint(nb, (float3)posA, out float3 nearest, out float tB, 2);
                     if (d < minNeighbourDistance || d > maxNeighbourDistance) continue;
 
                     Vector3 fwdB = ((Vector3)SplineUtility.EvaluateTangent(nb, tB)).normalized;
@@ -208,7 +210,7 @@ namespace NightRider.World
                 {
                     float tA = Mathf.Lerp(l.tStart, l.tEnd, s / (float)steps);
                     a.EvaluateWorld(tA, out var pa, out _, out _);
-                    SplineUtility.GetNearestPoint(nbTo, (float3)pa, out float3 pb, out _);
+                    SplineUtility.GetNearestPoint(nbTo, (float3)pa, out float3 pb, out _, 2);
                     segs.Add((pa, (Vector3)pb, l.side));
                 }
             }
