@@ -6,9 +6,14 @@
 // start/end along the lane — so adjacency is regional, not global.
 //
 // Bake is deterministic: same geometry -> same links. Gizmos draw every link so
-// you can verify before pressing Play. Re-bakes live in the editor; bakes once
-// at runtime. Results aren't serialized (recomputed) — fine while the map's
-// small; we serialize later for a big world.
+// you can verify before pressing Play. Results aren't serialized (recomputed) —
+// fine while the map's small; we serialize later for a big world.
+//
+// Cost note: a bake is ~O(lanes^2 * samples), so it must NOT run per frame. In
+// the editor it re-bakes only when geometry actually changes (spline edits via
+// Spline.Changed; moved/added lanes via a cheap transform/count poll), debounced
+// so a drag bakes once when it settles. At runtime it bakes once. Gizmo lines
+// are cached at bake time so drawing never projects.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -48,15 +53,59 @@ namespace NightRider.World
         readonly List<Link> _links = new();
         public IReadOnlyList<Link> Links => _links;
 
-        void OnEnable() => Bake();
-        void Start()    => Bake();   // runtime safety: all lanes exist by now
+        // Connector lines, precomputed at bake time so OnDrawGizmos never projects.
+        readonly List<(Vector3 a, Vector3 b, int side)> _gizmoSegments = new();
 
-        void Update()
+        void OnEnable()
         {
 #if UNITY_EDITOR
-            if (!Application.isPlaying && autoRebakeInEditor) Bake();
+            Spline.Changed += OnSplineChanged;
+#endif
+            Bake();
+        }
+
+        void OnDisable()
+        {
+#if UNITY_EDITOR
+            Spline.Changed -= OnSplineChanged;
 #endif
         }
+
+        void Start() => Bake();   // runtime: all lanes exist by now
+
+#if UNITY_EDITOR
+        bool _dirty;
+        double _lastEditTime;
+        int _lastLaneCount = -1;
+        const double RebakeDebounce = 0.15;
+
+        void OnSplineChanged(Spline spline, int knot, SplineModification mod) => MarkDirty();
+
+        void MarkDirty()
+        {
+            _dirty = true;
+            _lastEditTime = UnityEditor.EditorApplication.timeSinceStartup;
+        }
+
+        // Cheap checks every editor tick; the expensive bake runs only after
+        // edits settle (debounced). Spline edits arrive via Spline.Changed;
+        // moved or newly added lanes are caught by the transform/count poll.
+        void Update()
+        {
+            if (Application.isPlaying || !autoRebakeInEditor) return;
+
+            var lanes = FindObjectsByType<Lane>();
+            if (lanes.Length != _lastLaneCount) { _lastLaneCount = lanes.Length; MarkDirty(); }
+            foreach (var l in lanes)
+                if (l.transform.hasChanged) { l.transform.hasChanged = false; MarkDirty(); }
+
+            if (_dirty && UnityEditor.EditorApplication.timeSinceStartup - _lastEditTime > RebakeDebounce)
+            {
+                _dirty = false;
+                Bake();
+            }
+        }
+#endif
 
         [ContextMenu("Bake Now")]
         public void BakeNow()
@@ -81,8 +130,9 @@ namespace NightRider.World
         public void Bake()
         {
             _links.Clear();
+            _gizmoSegments.Clear();
 
-            var lanes = FindObjectsByType<Lane>(FindObjectsSortMode.None);
+            var lanes = FindObjectsByType<Lane>();
             if (lanes.Length < 2) return;
 
             // World-space native splines, built once and reused for projection.
@@ -137,10 +187,31 @@ namespace NightRider.World
                     BuildSpans(a, n, leftAt, -1);
                     BuildSpans(a, n, rightAt, +1);
                 }
+
+                CacheGizmos(natives);
             }
             finally
             {
                 foreach (var kv in natives) kv.Value.Dispose();
+            }
+        }
+
+        // Precompute connector lines once per bake (reusing the bake's native
+        // splines), so OnDrawGizmos is just DrawLine calls — no per-repaint
+        // projection or allocation.
+        void CacheGizmos(Dictionary<Lane, NativeSpline> natives)
+        {
+            const int steps = 10;
+            foreach (var l in _links)
+            {
+                if (l.from == null || l.to == null || !natives.TryGetValue(l.to, out var nbTo)) continue;
+                for (int s = 0; s <= steps; s++)
+                {
+                    float tA = Mathf.Lerp(l.tStart, l.tEnd, s / (float)steps);
+                    l.from.EvaluateWorld(tA, out var pa, out _, out _);
+                    SplineUtility.GetNearestPoint(nbTo, (float3)pa, out float3 pb, out _);
+                    _gizmoSegments.Add((pa, (Vector3)pb, l.side));
+                }
             }
         }
 
@@ -169,18 +240,10 @@ namespace NightRider.World
 
         void OnDrawGizmos()
         {
-            const int steps = 10;
-            foreach (var l in _links)
+            foreach (var seg in _gizmoSegments)
             {
-                if (l.from == null || l.to == null) continue;
-                Gizmos.color = l.side < 0 ? leftColor : rightColor;
-                for (int s = 0; s <= steps; s++)
-                {
-                    float tA = Mathf.Lerp(l.tStart, l.tEnd, s / (float)steps);
-                    l.from.EvaluateWorld(tA, out var pa, out _, out _);
-                    l.to.ProjectWorldPoint(pa, out var pb);
-                    Gizmos.DrawLine(pa, pb);
-                }
+                Gizmos.color = seg.side < 0 ? leftColor : rightColor;
+                Gizmos.DrawLine(seg.a, seg.b);
             }
         }
     }

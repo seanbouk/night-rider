@@ -41,7 +41,7 @@ namespace NightRider.World
 
         void Awake()
         {
-            if (network == null) network = FindFirstObjectByType<LaneNetwork>();
+            if (network == null) network = FindAnyObjectByType<LaneNetwork>();
         }
 
         void Update()

@@ -39,14 +39,39 @@ namespace NightRider.World
         int[] _tris;
         int _builtSamples = -1;
 
-        void OnEnable() => Build();
-
-        void Update()
+        void OnEnable()
         {
 #if UNITY_EDITOR
-            if (!Application.isPlaying) Build();   // live preview while authoring
+            Spline.Changed += OnSplineChanged;
+#endif
+            Build();
+        }
+
+        void OnDisable()
+        {
+#if UNITY_EDITOR
+            Spline.Changed -= OnSplineChanged;
 #endif
         }
+
+#if UNITY_EDITOR
+        bool _dirty;
+
+        // Inspector tweaks (width, samples, ...) — rebuild next editor tick.
+        void OnValidate() => _dirty = true;
+
+        // A knot on our spline moved — rebuild next editor tick.
+        void OnSplineChanged(Spline s, int knot, SplineModification mod)
+        {
+            if (spline != null && s == spline.Spline) _dirty = true;
+        }
+
+        // Editor only: rebuild on demand, never per frame.
+        void Update()
+        {
+            if (!Application.isPlaying && _dirty) { _dirty = false; Build(); }
+        }
+#endif
 
         [ContextMenu("Rebuild")]
         public void Build()
