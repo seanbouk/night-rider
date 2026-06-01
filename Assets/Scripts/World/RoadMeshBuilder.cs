@@ -36,6 +36,7 @@ namespace NightRider.World
         Mesh _mesh;
         Vector3[] _verts;
         Vector2[] _uvs;
+        Vector4[] _tangents;
         int[] _tris;
         int _builtSamples = -1;
 
@@ -84,9 +85,10 @@ namespace NightRider.World
 
             if (_verts == null || _builtSamples != count)
             {
-                _verts = new Vector3[vertCount];
-                _uvs   = new Vector2[vertCount];
-                _tris  = new int[count * 6];
+                _verts     = new Vector3[vertCount];
+                _uvs       = new Vector2[vertCount];
+                _tangents  = new Vector4[vertCount];
+                _tris      = new int[count * 6];
                 _builtSamples = count;
             }
 
@@ -104,11 +106,17 @@ namespace NightRider.World
                 // World up (flat world); a mirrored/reversed spline's own up flips.
                 Vector3 right   = Vector3.Cross(Vector3.up, forward).normalized;
 
-                Vector3 local      = transform.InverseTransformPoint(world);
-                Vector3 localRight = transform.InverseTransformDirection(right);
+                Vector3 local        = transform.InverseTransformPoint(world);
+                Vector3 localRight   = transform.InverseTransformDirection(right);
+                Vector3 localForward = transform.InverseTransformDirection(forward);
 
                 _verts[i * 2]     = local - localRight * halfW;
                 _verts[i * 2 + 1] = local + localRight * halfW;
+
+                // Road length-direction, for the shader's view-relative scroll.
+                var fwd4 = new Vector4(localForward.x, localForward.y, localForward.z, 1f);
+                _tangents[i * 2]     = fwd4;
+                _tangents[i * 2 + 1] = fwd4;
 
                 if (i > 0) lengthAccum += Vector3.Distance(world, prevWorld);
                 prevWorld = world;
@@ -143,6 +151,7 @@ namespace NightRider.World
             _mesh.vertices  = _verts;
             _mesh.uv        = _uvs;
             _mesh.triangles = _tris;
+            _mesh.tangents  = _tangents;
             _mesh.RecalculateNormals();
             _mesh.RecalculateBounds();
 
