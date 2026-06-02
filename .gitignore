@@ -109,3 +109,7 @@ InitTestScene*.unity*
 
 # Scratch / reference material (design sketches, prototype code not in the build)
 /refs/
+
+# Unity crash-recovery scenes (machine-local, transient)
+/[Aa]ssets/_Recovery/
+/[Aa]ssets/_Recovery.meta
