@@ -24,8 +24,13 @@ namespace NightRider.World
         [Min(0.01f), Tooltip("Road width in world units.")]
         public float width = 4f;
 
-        [Min(2), Tooltip("Segments along the spline. Higher = smoother curves.")]
-        public int samples = 200;
+        [Min(0.2f), Tooltip("World units per mesh segment along the road. Smaller = " +
+                            "smoother. Resolution scales with lane length, so long lanes " +
+                            "are as smooth as short ones.")]
+        public float metersPerSegment = 2f;
+
+        [Min(8), Tooltip("Hard cap on segments, so a huge lane can't run away.")]
+        public int maxSegments = 2000;
 
         [Min(0.0001f), Tooltip("Texture repeats per world unit along the road's length.")]
         public float tilesPerUnit = 0.1f;
@@ -80,7 +85,10 @@ namespace NightRider.World
             if (spline == null) spline = GetComponent<SplineContainer>();
             if (spline == null || spline.Spline == null || spline.Spline.Count < 2) return;
 
-            int count = Mathf.Max(2, samples);
+            // Segments scale with lane length, so smoothness is consistent
+            // regardless of how long the loop is.
+            float length = spline.CalculateLength();
+            int count = Mathf.Clamp(Mathf.CeilToInt(length / metersPerSegment), 8, maxSegments);
             int vertCount = (count + 1) * 2;
 
             if (_verts == null || _builtSamples != count)

@@ -308,7 +308,13 @@ namespace NightRider.World
 
             if (changed) _lastEditTime = UnityEditor.EditorApplication.timeSinceStartup;
 
+            // Don't bake mid-edit. Wait until: no scene handle is held
+            // (hotControl back to 0), no text field is being typed in
+            // (editingTextField false, i.e. it lost focus), and the final
+            // change has settled.
             if ((_dirty.Count > 0 || removals) &&
+                GUIUtility.hotControl == 0 &&
+                !UnityEditor.EditorGUIUtility.editingTextField &&
                 UnityEditor.EditorApplication.timeSinceStartup - _lastEditTime > RebakeDebounce)
             {
                 UpdateIncremental(lanes, currentSet);
