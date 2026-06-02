@@ -32,8 +32,6 @@ namespace NightRider.World
         [Min(8), Tooltip("Hard cap on segments, so a huge lane can't run away.")]
         public int maxSegments = 2000;
 
-        [Min(0.0001f), Tooltip("Texture repeats per world unit along the road's length.")]
-        public float tilesPerUnit = 0.1f;
 
         [Tooltip("Tick if the road renders upside-down (only visible from below).")]
         public bool flipFaces;
@@ -129,9 +127,10 @@ namespace NightRider.World
                 if (i > 0) lengthAccum += Vector3.Distance(world, prevWorld);
                 prevWorld = world;
 
-                float v = lengthAccum * tilesPerUnit;
-                _uvs[i * 2]     = new Vector2(0f, v);
-                _uvs[i * 2 + 1] = new Vector2(1f, v);
+                // V is raw world distance along the road; the shader's _Tiling
+                // sets dash density, and the scroll is honest world-metres.
+                _uvs[i * 2]     = new Vector2(0f, lengthAccum);
+                _uvs[i * 2 + 1] = new Vector2(1f, lengthAccum);
             }
 
             for (int i = 0; i < count; i++)

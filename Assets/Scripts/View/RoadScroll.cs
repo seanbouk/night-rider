@@ -19,6 +19,11 @@ namespace NightRider.View
                           "'road moves a touch too fast' desync. 0 = off.")]
         public float scrollMultiplier = 0.4f;
 
+        // Shared so carriages can move WITH the road (same apparent speed/direction),
+        // instead of slipping against the scrolling surface.
+        public static float ExtraSpeed;                    // world metres/sec beyond real motion
+        public static Vector3 FlowForward = Vector3.forward; // camera forward
+
         float _scroll;
         static readonly int ScrollId = Shader.PropertyToID("_RoadScroll");
         static readonly int FlowId   = Shader.PropertyToID("_RoadFlowDir");
@@ -30,11 +35,13 @@ namespace NightRider.View
 
         void Update()
         {
-            float speed = rider != null ? rider.speed : 0f;
-            _scroll += speed * scrollMultiplier * Time.deltaTime;
+            float speed = rider != null ? rider.CurrentSpeed : 0f;
+            ExtraSpeed = speed * scrollMultiplier;
+            FlowForward = view != null ? view.forward : Vector3.forward;
+            _scroll += ExtraSpeed * Time.deltaTime;
 
             Shader.SetGlobalFloat(ScrollId, _scroll);
-            Shader.SetGlobalVector(FlowId, view != null ? view.forward : Vector3.forward);
+            Shader.SetGlobalVector(FlowId, FlowForward);
         }
     }
 }

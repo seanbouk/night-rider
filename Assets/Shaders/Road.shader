@@ -15,7 +15,7 @@ Shader "NightRider/Road"
     {
         _BaseColor   ("Asphalt", Color) = (0.12, 0.12, 0.13, 1)
         _LineColor   ("Line",    Color) = (0.85, 0.80, 0.45, 1)
-        _Tiling      ("Length tiling (dashes along road)", Float) = 1
+        _Tiling      ("Dashes per metre along road", Float) = 0.1
         _DashRatio   ("Centre dash on-fraction", Range(0,1)) = 0.5
         _CentreWidth ("Centre line width (across)", Range(0,0.5)) = 0.05
         _EdgeWidth   ("Edge line width (across)",   Range(0,0.5)) = 0.05
@@ -71,8 +71,9 @@ Shader "NightRider/Road"
             half4 frag (Varyings IN) : SV_Target
             {
                 // Flow toward the camera regardless of lane direction.
+                // uv.y is world distance; _RoadScroll is world metres; _Tiling = dashes/metre.
                 float dir = sign(dot(normalize(IN.tangentWS), _RoadFlowDir));
-                float v = IN.uv.y * _Tiling + _RoadScroll * dir;
+                float v = (IN.uv.y + _RoadScroll * dir) * _Tiling;
                 float u = IN.uv.x;
 
                 half3 col = _BaseColor.rgb;

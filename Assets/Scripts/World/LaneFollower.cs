@@ -1,9 +1,10 @@
 // Rides a lane, and hops to a neighbouring lane on left/right input.
 //
-// Forward motion is constant ground speed along the current lane. A hop asks the
-// LaneNetwork for the neighbour on the pressed side at the current position; if
-// one exists, it projects onto that lane and slides across over laneChangeTime
-// while still moving forward. (Full junction/fork following arrives at M5.)
+// Accelerates from a standstill toward its cruise speed. Rear-ends a slower
+// carriage ahead on the same lane (a one-shot speed exchange, then both re-
+// accelerate), and won't tunnel through it. A hop asks the LaneNetwork for the
+// neighbour on the pressed side, refuses if a carriage is alongside there, else
+// projects onto that lane and slides across (ease-out) while still moving.
 
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -18,14 +19,28 @@ namespace NightRider.World
         [Tooltip("Adjacency source. Auto-found in the scene if left empty.")]
         public LaneNetwork network;
 
-        [Min(0f), Tooltip("Ground speed in world units per second.")]
+        [Header("Speed")]
+        [Min(0f), Tooltip("Cruise (ideal) speed in world units per second.")]
         public float speed = 12f;
+        [Min(0f), Tooltip("Acceleration toward cruise speed (units/s^2). Rider starts from 0.")]
+        public float acceleration = 8f;
+        [Min(0f), Tooltip("Deceleration when slowing (units/s^2).")]
+        public float braking = 16f;
+
         [Range(0f, 1f), Tooltip("Start position along the lane (0..1).")]
         public float t = 0f;
         [Tooltip("Lift above the road so the rider sits on it, not through it.")]
         public float heightOffset = 1f;
         [Tooltip("If the lane isn't closed, stop at the end instead of looping.")]
         public bool stopAtEnd = false;
+
+        [Header("Traffic")]
+        [Min(0f), Tooltip("Gap at which we rear-end the carriage ahead (world units).")]
+        public float bumpDistance = 3f;
+        [Min(0f), Tooltip("Hard minimum gap — never overlap the carriage ahead.")]
+        public float minGap = 2f;
+        [Min(0f), Tooltip("Block a lane change if a carriage is within this distance on the target lane.")]
+        public float laneChangeClearance = 4f;
 
         [Header("Lane switching")]
         [Min(0.01f), Tooltip("Seconds to slide across when hopping to a neighbour.")]
@@ -38,6 +53,11 @@ namespace NightRider.World
         float _fromT;
         float _blend = 1f;
         float _blendDuration = 0.25f;
+
+        // Speed accelerates from 0 toward `speed`. RoadScroll reads CurrentSpeed.
+        float _currentSpeed;
+        public float CurrentSpeed => _currentSpeed;
+        Carriage _contact;   // carriage we're currently touching (for one-shot bumps)
 
         void Awake()
         {
@@ -65,14 +85,17 @@ namespace NightRider.World
             if (side == 0) return;
 
             if (network.TryGetNeighbor(lane, t, side, out var neighbor) && neighbor != null)
-                SwitchTo(neighbor);
+            {
+                lane.EvaluateWorld(t, out var worldPos, out _, out _);
+                float landT = neighbor.ProjectWorldPoint(worldPos, out _);
+                // Can't hop into a lane where a carriage is alongside.
+                if (!Carriage.Occupied(neighbor, landT, laneChangeClearance))
+                    SwitchTo(neighbor, landT);
+            }
         }
 
-        void SwitchTo(Lane target)
+        void SwitchTo(Lane target, float targetT)
         {
-            lane.EvaluateWorld(t, out var worldPos, out _, out _);
-            float targetT = target.ProjectWorldPoint(worldPos, out _);
-
             _from = lane;
             _fromT = t;
             lane = target;
@@ -86,11 +109,49 @@ namespace NightRider.World
             float len = lane.Length;
             if (len < 0.0001f) return;
 
-            t += speed * dt / len;
+            // Accelerate toward cruise speed (rider starts from 0).
+            float rate = _currentSpeed < speed ? acceleration : braking;
+            _currentSpeed = Mathf.MoveTowards(_currentSpeed, speed, rate * dt);
+
+            // Carriage ahead on our lane?
+            var ahead = Carriage.NearestAhead(lane, t, out float gap);
+
+            // Rear-end knock, once per contact: we drop to half its speed, it
+            // jumps to ours; both then re-accelerate toward their ideals.
+            if (ahead != null && gap <= bumpDistance)
+            {
+                if (_contact != ahead)
+                {
+                    _contact = ahead;
+                    float mine = _currentSpeed;
+                    _currentSpeed = 0.5f * ahead.CurrentSpeed;
+                    ahead.Bump(mine);
+                }
+            }
+            else if (ahead == null || gap > bumpDistance * 1.5f)
+            {
+                _contact = null;   // separated — allow a fresh bump next time
+            }
+
+            t += _currentSpeed * dt / len;
             if (t >= 1f)
             {
                 bool canLoop = lane.Closed && !stopAtEnd;
                 t = canLoop ? t - 1f : 1f;
+            }
+
+            // Hard floor: never tunnel through the carriage ahead.
+            if (ahead != null)
+            {
+                float gapT = ahead.t - t;
+                if (lane.Closed && gapT < 0f) gapT += 1f;
+                float minGapT = minGap / len;
+                if (gapT < minGapT)
+                {
+                    t = ahead.t - minGapT;
+                    if (t < 0f) t += 1f;
+                    if (_currentSpeed > ahead.CurrentSpeed) _currentSpeed = ahead.CurrentSpeed;
+                }
             }
 
             // Keep the from-lane position advancing too, so the slide stays abreast.
@@ -99,7 +160,7 @@ namespace NightRider.World
                 float lenF = _from.Length;
                 if (lenF > 0.0001f)
                 {
-                    _fromT += speed * dt / lenF;
+                    _fromT += _currentSpeed * dt / lenF;
                     if (_fromT >= 1f && _from.Closed) _fromT -= 1f;
                 }
             }
