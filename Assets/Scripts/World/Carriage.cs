@@ -20,17 +20,50 @@ namespace NightRider.World
         [Range(0f, 1f)] public float t;
         [Min(0f)] public float idealSpeed = 6f;
         [Min(0f)] public float acceleration = 8f;
+        [Min(0f), Tooltip("Deceleration to a stop once wrecked (units/s^2). Higher = stops sooner.")]
+        public float wreckBrake = 40f;
         [Min(0f), Tooltip("Gap at which we rear-end the carriage in front.")]
         public float bumpDistance = 3f;
         [Min(0f), Tooltip("Hard minimum gap — never overlap the carriage in front.")]
         public float minGap = 2f;
         public float heightOffset = 0.4f;
 
-        public float CurrentSpeed { get; private set; }
-        Carriage _contact;   // carriage in front we're touching (one-shot bumps)
+        [Header("Energy")]
+        [Range(0f, 1f), Tooltip("Runtime energy. Rider rear-ends reduce it; 0 = wrecked.")]
+        public float energy = 1f;
+        public Color barBack = new(0f, 0f, 0f, 0.6f);
+        public Color barFill = new(0.3f, 1f, 0.4f, 0.9f);
 
-        void OnEnable()  { if (!All.Contains(this)) All.Add(this); CurrentSpeed = idealSpeed; }
+        public float CurrentSpeed { get; private set; }
+        public bool IsWreck => _destroyed;
+        public bool Collected { get; private set; }   // lupin already granted for this wreck
+        public void Collect() => Collected = true;
+
+        Carriage _contact;   // carriage in front we're touching (one-shot bumps)
+        bool _destroyed;
+        Renderer _renderer;
+
+        void OnEnable()  { if (!All.Contains(this)) All.Add(this); CurrentSpeed = idealSpeed; _renderer = GetComponentInChildren<Renderer>(); }
         void OnDisable() { All.Remove(this); }
+
+        // Rider rear-ended us: lose energy. At zero we become a wreck — coast to a
+        // stop (idealSpeed 0), dim to half-bright, and stop colliding (everyone
+        // drives through). Collecting it is the rider's job.
+        public void Hit(float fraction)
+        {
+            if (_destroyed) return;
+            energy -= fraction;
+            if (energy > 0f) return;
+
+            energy = 0f;
+            _destroyed = true;
+            idealSpeed = 0f;
+            if (_renderer != null)
+            {
+                Color c = _renderer.material.color;
+                _renderer.material.color = new Color(c.r * 0.5f, c.g * 0.5f, c.b * 0.5f, c.a);
+            }
+        }
 
         // Knocked forward by the rider — jump to (at least) the given speed, then
         // re-accelerate back down to idealSpeed.
@@ -43,10 +76,16 @@ namespace NightRider.World
             if (len < 0.0001f) return;
 
             float dt = Time.deltaTime;
-            CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, idealSpeed, acceleration * dt);
+            // Wrecks brake hard to a stop; live carriages ease to cruise.
+            float rate = _destroyed ? wreckBrake : acceleration;
+            CurrentSpeed = Mathf.MoveTowards(CurrentSpeed, idealSpeed, rate * dt);
 
             // Rear-end the carriage in front (one-shot knock, like the rider).
-            var ahead = NearestAhead(lane, t, out float gap, this);
+            // Wrecks don't interact with traffic at all.
+            Carriage ahead = null;
+            float gap = float.MaxValue;
+            if (!_destroyed) ahead = NearestAhead(lane, t, out gap, this);
+
             if (ahead != null && gap <= bumpDistance)
             {
                 if (_contact != ahead)
@@ -106,7 +145,7 @@ namespace NightRider.World
 
             foreach (var c in All)
             {
-                if (c == null || c == ignore || c.lane != lane) continue;
+                if (c == null || c == ignore || c.IsWreck || c.lane != lane) continue;
                 float dt = c.t - t;
                 if (lane.Closed) { if (dt < 0f) dt += 1f; }
                 else if (dt < 0f) continue;
@@ -125,12 +164,41 @@ namespace NightRider.World
 
             foreach (var c in All)
             {
-                if (c == null || c.lane != lane) continue;
+                if (c == null || c.IsWreck || c.lane != lane) continue;
                 float dt = Mathf.Abs(c.t - t);
                 if (lane.Closed) dt = Mathf.Min(dt, 1f - dt);
                 if (dt * len < clearance) return true;
             }
             return false;
+        }
+
+        // Energy bar above the carriage (screen-projected) while it's damaged but
+        // still alive. Hidden at full energy and once wrecked.
+        void OnGUI()
+        {
+            if (_destroyed || energy >= 1f) return;
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            Vector3 sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 3f);
+            if (sp.z <= 0f) return;
+
+            const float w = 44f, h = 5f;
+            float x = sp.x - w * 0.5f;
+            float y = Screen.height - sp.y;
+            BarFill(new Rect(x, y, w, h), barBack);
+            BarFill(new Rect(x, y, w * Mathf.Clamp01(energy), h), barFill);
+        }
+
+        static Texture2D _white;
+        static void BarFill(Rect r, Color c)
+        {
+            if (_white == null)
+            {
+                _white = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+                _white.SetPixel(0, 0, Color.white); _white.Apply();
+            }
+            var prev = GUI.color; GUI.color = c; GUI.DrawTexture(r, _white); GUI.color = prev;
         }
     }
 }

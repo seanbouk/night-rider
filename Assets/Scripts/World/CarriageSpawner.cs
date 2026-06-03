@@ -32,6 +32,8 @@ namespace NightRider.World
         [Range(0f, 1f), Tooltip("Carriage cruise speed as a fraction of the rider's.")]
         public float speedFraction = 0.5f;
         [Min(0f)] public float acceleration = 8f;
+        [Min(0f), Tooltip("How hard a wreck brakes to a stop (units/s^2). Higher = stops sooner.")]
+        public float wreckBrake = 40f;
         public float heightOffset = 0.4f;
         [Tooltip("Placeholder visual scale (longer than the rider along travel).")]
         public Vector3 visualScale = new(0.7f, 0.7f, 1.8f);
@@ -132,6 +134,7 @@ namespace NightRider.World
             car.t = t;
             car.idealSpeed = (rider != null ? rider.speed : 12f) * speedFraction;
             car.acceleration = acceleration;
+            car.wreckBrake = wreckBrake;
             car.heightOffset = heightOffset;
 
             _spawned.Add(car);

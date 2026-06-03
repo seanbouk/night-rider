@@ -45,5 +45,12 @@ namespace NightRider.World
                 new() { type = ItemType.Heads,  emoji = "💀", name = "Heads",  count = 0 },
             };
         }
+
+        // Add (or remove) count for an item type. No-op if the type isn't present.
+        public void Add(ItemType type, int amount)
+        {
+            foreach (var s in items)
+                if (s.type == type) { s.count = Mathf.Max(0, s.count + amount); return; }
+        }
     }
 }

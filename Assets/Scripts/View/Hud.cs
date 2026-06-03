@@ -12,6 +12,7 @@
 // NOTE: OnGUI only draws in Play mode. Emoji need an emoji-capable font — if the
 // item glyphs show as boxes, assign one to Hud Font (or edit the emoji strings).
 
+using System.Collections.Generic;
 using UnityEngine;
 using NightRider.World;
 
@@ -28,6 +29,15 @@ namespace NightRider.View
         public Color hudText    = Color.white;
         public Color headFill   = new(1f, 1f, 1f, 0.06f);
         public Color headBorder = new(1f, 1f, 1f, 0.5f);
+
+        [Header("Pickup FX")]
+        [Min(0.05f)] public float pickupDuration = 1.2f;
+        [Tooltip("Seconds spent rising (solid) before it starts blinking.")]
+        public float pickupRiseDuration = 0.4f;
+        [Tooltip("How far a pickup rises, in grid cells.")]
+        public float pickupRiseCells = 2f;
+        [Tooltip("Blink half-period (seconds).")]
+        public float pickupBlink = 0.12f;
 
         [Header("Framing overlay")]
         [Tooltip("Draw the 4:3 / 40x30 framing overlay (development aid).")]
@@ -75,8 +85,18 @@ namespace NightRider.View
             _cw = w / cols;
             _ch = h / rows;
 
+            EnsureLabel();
             if (showSafeArea) DrawOverlay(w, h);
             DrawContent();
+            DrawPickups();
+        }
+
+        void EnsureLabel()
+        {
+            _label ??= new GUIStyle { alignment = TextAnchor.MiddleCenter };
+            _label.font = hudFont;                 // null = default font
+            _label.normal.textColor = hudText;
+            _label.fontSize = Mathf.Max(6, Mathf.RoundToInt(_ch * 0.8f));
         }
 
         // ---------------------------------------------------------------- content
@@ -85,11 +105,6 @@ namespace NightRider.View
         {
             if (player == null) player = FindAnyObjectByType<PlayerState>();
             if (player == null) return;
-
-            _label ??= new GUIStyle { alignment = TextAnchor.MiddleCenter };
-            _label.font = hudFont;                 // null = default font
-            _label.normal.textColor = hudText;
-            _label.fontSize = Mathf.Max(6, Mathf.RoundToInt(_ch * 0.8f));
 
             int top = rows - overscanRows - hudRows;
             const int boxW = 4, boxH = 4;
@@ -142,6 +157,61 @@ namespace NightRider.View
         void DrawGlyph(int col, int row, string glyph)
         {
             GUI.Label(new Rect(_ox + col * _cw, _oy + row * _ch, _cw, _ch), glyph, _label);
+        }
+
+        // ---------------------------------------------------------------- pickups
+
+        class Pickup { public string glyph; public ItemType type; public Vector2 gui; public float elapsed; }
+        readonly List<Pickup> _pickups = new();
+
+        // HUD-space pickup at a world point: it appears there, rises, blinks, then
+        // vanishes and credits the item.
+        public void SpawnPickup(Vector3 worldPos, ItemType type)
+        {
+            if (player == null) player = FindAnyObjectByType<PlayerState>();
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            Vector3 sp = cam.WorldToScreenPoint(worldPos);
+            if (sp.z <= 0f) return;
+
+            string glyph = type.ToString();
+            if (player != null)
+                foreach (var it in player.items) if (it.type == type) { glyph = it.emoji; break; }
+
+            _pickups.Add(new Pickup { glyph = glyph, type = type, gui = new Vector2(sp.x, Screen.height - sp.y) });
+        }
+
+        void Update()
+        {
+            if (_pickups.Count == 0) return;
+            if (player == null) player = FindAnyObjectByType<PlayerState>();
+
+            for (int i = _pickups.Count - 1; i >= 0; i--)
+            {
+                _pickups[i].elapsed += Time.deltaTime;
+                if (_pickups[i].elapsed >= pickupDuration)
+                {
+                    if (player != null) player.Add(_pickups[i].type, 1);   // credit on vanish
+                    _pickups.RemoveAt(i);
+                }
+            }
+        }
+
+        void DrawPickups()
+        {
+            foreach (var p in _pickups)
+            {
+                // Phase 1: rise (solid). Phase 2: hold at top and blink.
+                float riseK = Mathf.Clamp01(p.elapsed / pickupRiseDuration);
+                float y = p.gui.y - pickupRiseCells * _ch * riseK;
+
+                bool visible = p.elapsed < pickupRiseDuration
+                    || Mathf.Repeat(p.elapsed - pickupRiseDuration, pickupBlink * 2f) < pickupBlink;
+                if (!visible) continue;
+
+                GUI.Label(new Rect(p.gui.x - _cw * 0.5f, y - _ch * 0.5f, _cw, _ch), p.glyph, _label);
+            }
         }
 
         // ---------------------------------------------------------------- overlay

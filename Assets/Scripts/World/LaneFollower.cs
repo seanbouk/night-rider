@@ -8,6 +8,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using NightRider.View;   // Hud (HUD-space pickup FX)
 
 namespace NightRider.World
 {
@@ -45,6 +46,10 @@ namespace NightRider.World
         public float minGap = 2f;
         [Min(0f), Tooltip("Block a lane change if a carriage is within this distance on the target lane.")]
         public float laneChangeClearance = 4f;
+        [Range(0f, 1f), Tooltip("Energy a carriage loses each time you rear-end it.")]
+        public float bumpEnergyDamage = 0.4f;
+        [Min(0f), Tooltip("How close to a wreck the rider must be to run through and collect it.")]
+        public float collectDistance = 3f;
 
         [Header("Lane switching")]
         [Min(0.01f), Tooltip("Seconds to slide across when hopping to a neighbour.")]
@@ -66,6 +71,7 @@ namespace NightRider.World
         float _currentSpeed;
         public float CurrentSpeed => _currentSpeed;
         Carriage _contact;   // carriage we're currently touching (for one-shot bumps)
+        Hud _hud;
 
         void Awake()
         {
@@ -79,6 +85,7 @@ namespace NightRider.World
             HandleInput();
             Advance(Time.deltaTime);
             Place(Time.deltaTime);
+            CollectWrecks();
         }
 
         void HandleInput()
@@ -134,6 +141,7 @@ namespace NightRider.World
                     float mine = _currentSpeed;
                     _currentSpeed = bumpSlowdown * ahead.CurrentSpeed;
                     ahead.Bump(mine * bumpPush);
+                    ahead.Hit(bumpEnergyDamage);
                 }
             }
             else if (ahead == null || gap > bumpDistance * 1.5f)
@@ -210,6 +218,33 @@ namespace NightRider.World
             return flat.sqrMagnitude < 1e-6f
                 ? fallback
                 : Quaternion.LookRotation(flat.normalized, Vector3.up);
+        }
+
+        // Run through wrecks on our lane: collect (spawn a HUD pickup) and remove.
+        void CollectWrecks()
+        {
+            if (_hud == null) _hud = FindAnyObjectByType<Hud>();
+            float len = lane.Length;
+            if (len < 0.0001f) return;
+
+            var all = Carriage.All;
+            for (int i = all.Count - 1; i >= 0; i--)
+            {
+                var c = all[i];
+                if (c == null || !c.IsWreck || c.Collected || c.lane != lane) continue;
+
+                // Signed along-lane distance: >0 ahead of us, <0 behind us.
+                float dtt = c.t - t;
+                if (lane.Closed) { if (dtt > 0.5f) dtt -= 1f; else if (dtt < -0.5f) dtt += 1f; }
+                float signed = dtt * len;
+
+                // Only once it's just slipped behind us — i.e. we've driven through it.
+                if (signed >= 0f || signed < -collectDistance) continue;
+
+                // Collect once; leave the wreck in the world to be culled off-camera.
+                if (_hud != null) _hud.SpawnPickup(c.transform.position, ItemType.Lupins);
+                c.Collect();
+            }
         }
 
         // Scene-view marker for the start pose (lane + t), so it's visible while
