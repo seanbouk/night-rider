@@ -37,6 +37,10 @@ namespace NightRider.World
         [Header("Traffic")]
         [Min(0f), Tooltip("Gap at which we rear-end the carriage ahead (world units).")]
         public float bumpDistance = 3f;
+        [Range(0f, 1f), Tooltip("How much YOU slow on impact: your speed becomes this x the carriage's speed. Lower = slowed more.")]
+        public float bumpSlowdown = 0.5f;
+        [Min(0f), Tooltip("How hard you SHOVE the carriage: its speed jumps to this x your speed at impact. Higher = harder.")]
+        public float bumpPush = 1f;
         [Min(0f), Tooltip("Hard minimum gap — never overlap the carriage ahead.")]
         public float minGap = 2f;
         [Min(0f), Tooltip("Block a lane change if a carriage is within this distance on the target lane.")]
@@ -128,8 +132,8 @@ namespace NightRider.World
                 {
                     _contact = ahead;
                     float mine = _currentSpeed;
-                    _currentSpeed = 0.5f * ahead.CurrentSpeed;
-                    ahead.Bump(mine);
+                    _currentSpeed = bumpSlowdown * ahead.CurrentSpeed;
+                    ahead.Bump(mine * bumpPush);
                 }
             }
             else if (ahead == null || gap > bumpDistance * 1.5f)
