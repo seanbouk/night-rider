@@ -51,6 +51,15 @@ namespace NightRider.World
         [Min(0f), Tooltip("How close to a wreck the rider must be to run through and collect it.")]
         public float collectDistance = 3f;
 
+        [Header("Attack")]
+        [Min(0f), Tooltip("How far to the side an attack reaches (also the debug blade's length).")]
+        public float attackReach = 6f;
+        [Range(0f, 1f), Tooltip("Energy removed per attack. 1 = one-shot kill.")]
+        public float attackDamage = 1f;
+        [Min(0f), Tooltip("Seconds the debug attack visual shows.")]
+        public float attackVisualTime = 0.15f;
+        public Color attackVisualColor = new(1f, 0.35f, 0.1f, 1f);
+
         [Header("Lane switching")]
         [Min(0.01f), Tooltip("Seconds to slide across when hopping to a neighbour.")]
         public float laneChangeTime = 0.25f;
@@ -83,6 +92,7 @@ namespace NightRider.World
             if (lane == null || !lane.IsValid) return;
 
             HandleInput();
+            HandleAttack();
             Advance(Time.deltaTime);
             Place(Time.deltaTime);
             CollectWrecks();
@@ -117,6 +127,48 @@ namespace NightRider.World
             t = targetT;
             _blend = 0f;
             _blendDuration = Mathf.Max(0.01f, laneChangeTime);
+        }
+
+        // < attacks the lane to the left, > the lane to the right.
+        void HandleAttack()
+        {
+            var kb = Keyboard.current;
+            if (kb == null) return;
+            if (kb.commaKey.wasPressedThisFrame) Attack(-1);
+            else if (kb.periodKey.wasPressedThisFrame) Attack(+1);
+        }
+
+        void Attack(int side)
+        {
+            SpawnAttackVisual(side);
+
+            if (network == null) return;
+            if (!network.TryGetNeighbor(lane, t, side, out var nb) || nb == null) return;
+
+            lane.EvaluateWorld(t, out var worldPos, out _, out _);
+            float tN = nb.ProjectWorldPoint(worldPos, out _);
+            var target = Carriage.NearestTo(nb, tN, attackReach);
+            if (target == null) return;
+
+            // Lupin right away; carriage just dies (dark, brakes to a stop) — no shove.
+            if (_hud == null) _hud = FindAnyObjectByType<Hud>();
+            if (_hud != null) _hud.SpawnPickup(target.transform.position, ItemType.Lupins);
+            target.Hit(attackDamage);
+            target.Collect();
+        }
+
+        // Debug blade: wide (sideways), thin, shallow — a sword held horizontally.
+        void SpawnAttackVisual(int side)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(transform, false);
+
+            float len = Mathf.Max(0.1f, attackReach);
+            go.transform.localScale = new Vector3(len, 0.4f, 1.2f);
+            go.transform.localPosition = new Vector3(side * len * 0.5f, 0f, 0f);
+            go.GetComponent<MeshRenderer>().material.color = attackVisualColor;
+            Destroy(go, attackVisualTime);
         }
 
         void Advance(float dt)

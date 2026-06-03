@@ -155,6 +155,26 @@ namespace NightRider.World
             return nearest;
         }
 
+        // Nearest LIVE carriage to position t on the lane, within range (either
+        // direction). Used for attacks. Null if none.
+        public static Carriage NearestTo(Lane lane, float t, float range)
+        {
+            float len = lane.Length;
+            if (len < 0.0001f) return null;
+
+            Carriage best = null;
+            float bestDist = range;
+            foreach (var c in All)
+            {
+                if (c == null || c.IsWreck || c.lane != lane) continue;
+                float dt = Mathf.Abs(c.t - t);
+                if (lane.Closed) dt = Mathf.Min(dt, 1f - dt);
+                float d = dt * len;
+                if (d <= bestDist) { bestDist = d; best = c; }
+            }
+            return best;
+        }
+
         // Is any carriage within `clearance` world units of position t on the lane
         // (either direction)? Used to block a lane change into occupied space.
         public static bool Occupied(Lane lane, float t, float clearance)
