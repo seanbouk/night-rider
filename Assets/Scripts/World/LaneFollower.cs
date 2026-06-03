@@ -48,6 +48,10 @@ namespace NightRider.World
         [Min(1f), Tooltip("Ease-out punch: higher = snappier kick off the line, softer landing.")]
         public float easeOutPower = 3f;
 
+        [Header("Editor")]
+        [Min(0.1f), Tooltip("Size of the start-pose Scene gizmo.")]
+        public float startGizmoSize = 8f;
+
         // Blend state while a hop animates. _blend reaches 1 when settled.
         Lane _from;
         float _fromT;
@@ -202,6 +206,29 @@ namespace NightRider.World
             return flat.sqrMagnitude < 1e-6f
                 ? fallback
                 : Quaternion.LookRotation(flat.normalized, Vector3.up);
+        }
+
+        // Scene-view marker for the start pose (lane + t), so it's visible while
+        // authoring. In edit mode this is the start; in play it tracks the rider.
+        void OnDrawGizmos()
+        {
+            if (lane == null || !lane.IsValid) return;
+
+            lane.EvaluateWorld(Mathf.Clamp01(t), out var pos, out var fwd, out _);
+            Vector3 p = pos + Vector3.up * heightOffset;
+            Vector3 flat = Vector3.ProjectOnPlane(fwd, Vector3.up);
+            flat = flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, flat);
+
+            float s = startGizmoSize;
+            Gizmos.color = new Color(0.2f, 1f, 0.4f, 0.9f);
+            Gizmos.DrawWireSphere(p, s);
+
+            // Travel-direction arrow.
+            Vector3 tip = p + flat * s * 3f;
+            Gizmos.DrawLine(p, tip);
+            Gizmos.DrawLine(tip, tip - flat * s + side * s * 0.6f);
+            Gizmos.DrawLine(tip, tip - flat * s - side * s * 0.6f);
         }
     }
 }
