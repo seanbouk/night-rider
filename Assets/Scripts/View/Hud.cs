@@ -1,25 +1,35 @@
-// Development HUD. For now it only draws a framing overlay so the game can be
-// composed against its target display before any art/shader work is committed:
+// The game HUD, drawn on a strict 40x30 grid (one glyph per cell).
 //
-//   - a 4:3 area, zoom-to-fit and centred (outside it is left transparent so the
-//     full wide view stays usable for debugging),
-//   - a pale graph-paper grid over a 40x30 layout (square cells),
-//   - solid-black side pillars (the NES only really used the middle columns),
-//   - 50% black top & bottom rows (unsafe from overscan),
-//   - a 50% purple strip (reserved for the HUD) just above the bottom row,
-//   - two amber verticals marking the central 35 columns: the NES drew 280 px
-//     (35 tiles) across the full width (pixels weren't square). We keep square
-//     pixels for now; the amber lines just mark where that active width sits.
+// Content (always drawn): a 4x4 head box (the player's head, later) computed
+// horizontally centred; two compact inventory columns to its left (emoji x ###,
+// three digits — names are kept in data but not shown here); and level + gold to
+// its right. Layout is code-driven so the centring can't drift.
 //
-// Real HUD elements will live in this component later; the overlay is an
-// optional (default-on) dev aid. NOTE: OnGUI only draws in Play mode.
+// Plus an optional (default-on) framing overlay: the 4:3 zoom-to-fit area, a
+// pale graph-paper grid, NES side pillars, overscan rows, the HUD strip tint,
+// and amber lines marking the central 35-column active width.
+//
+// NOTE: OnGUI only draws in Play mode. Emoji need an emoji-capable font — if the
+// item glyphs show as boxes, assign one to Hud Font (or edit the emoji strings).
 
 using UnityEngine;
+using NightRider.World;
 
 namespace NightRider.View
 {
     public class Hud : MonoBehaviour
     {
+        [Header("Data")]
+        public PlayerState player;
+        [Tooltip("Font for HUD glyphs. Assign an emoji-capable font if emoji show as boxes.")]
+        public Font hudFont;
+
+        [Header("Content colours")]
+        public Color hudText    = Color.white;
+        public Color headFill   = new(1f, 1f, 1f, 0.06f);
+        public Color headBorder = new(1f, 1f, 1f, 0.5f);
+
+        [Header("Framing overlay")]
         [Tooltip("Draw the 4:3 / 40x30 framing overlay (development aid).")]
         public bool showSafeArea = true;
 
@@ -31,7 +41,7 @@ namespace NightRider.View
         [Tooltip("Overscan-unsafe rows at the very top and very bottom.")]
         public int overscanRows = 1;
         [Tooltip("Reserved HUD rows, just above the bottom overscan row.")]
-        public int hudRows = 3;
+        public int hudRows = 4;
         [Tooltip("Central columns the NES active width (280px / 35 tiles) covers.")]
         public int centerColumns = 35;
 
@@ -39,56 +49,127 @@ namespace NightRider.View
         public float gridThickness = 1f;
         public float amberThickness = 2f;
 
-        [Header("Colours")]
+        [Header("Overlay colours")]
         public Color pillar   = Color.black;
         public Color overscan = new(0f, 0f, 0f, 0.5f);
-        public Color hud      = new(0.5f, 0f, 0.5f, 0.5f);
+        public Color hudStrip = new(0.5f, 0f, 0.5f, 0.5f);
         public Color grid     = new(1f, 1f, 1f, 0.15f);
         public Color amber    = new(1f, 0.65f, 0f, 0.85f);
 
         Texture2D _tex;
+        GUIStyle _label;
+        float _ox, _oy, _cw, _ch;   // grid origin + cell size, set each OnGUI
 
         void OnGUI()
         {
-            if (!showSafeArea) return;
             EnsureTexture();
 
-            // Zoom-to-fit a 4:3 area, centred. Outside it is left transparent.
+            // Zoom-to-fit a 4:3 area, centred.
             const float aspect = 4f / 3f;
             float sw = Screen.width, sh = Screen.height;
             float w, h;
-            if (sw / sh > aspect) { h = sh; w = h * aspect; }   // wide screen: fit by height
-            else                  { w = sw; h = w / aspect; }   // tall screen: fit by width
-            float ox = (sw - w) * 0.5f;
-            float oy = (sh - h) * 0.5f;
+            if (sw / sh > aspect) { h = sh; w = h * aspect; }
+            else                  { w = sw; h = w / aspect; }
+            _ox = (sw - w) * 0.5f;
+            _oy = (sh - h) * 0.5f;
+            _cw = w / cols;
+            _ch = h / rows;
 
-            float cw = w / cols, ch = h / rows;
+            if (showSafeArea) DrawOverlay(w, h);
+            DrawContent();
+        }
 
-            // Rect for a grid span: columns [c0,c1), rows [r0,r1) from the top-left.
+        // ---------------------------------------------------------------- content
+
+        void DrawContent()
+        {
+            if (player == null) player = FindAnyObjectByType<PlayerState>();
+            if (player == null) return;
+
+            _label ??= new GUIStyle { alignment = TextAnchor.MiddleCenter };
+            _label.font = hudFont;                 // null = default font
+            _label.normal.textColor = hudText;
+            _label.fontSize = Mathf.Max(6, Mathf.RoundToInt(_ch * 0.8f));
+
+            int top = rows - overscanRows - hudRows;
+            const int boxW = 4, boxH = 4;
+            int boxCol = (cols - boxW) / 2;            // always horizontally centred
+
+            // Inventory: two compact columns (emoji x ###), both left of the box,
+            // dropped to the lower three rows.
+            int colA = 5;
+            int colB = boxCol - 7;
+            int itemRow = top + 1;
+            var items = player.items;
+            for (int i = 0; i < 3 && i < items.Count; i++)     DrawCompact(colA, itemRow + i, items[i].emoji, items[i].count);
+            for (int i = 0; i < 3 && i + 3 < items.Count; i++) DrawCompact(colB, itemRow + i, items[i + 3].emoji, items[i + 3].count);
+
+            // Head box, 4x4, horizontally centred (fills the strip).
+            DrawBox(boxCol, top, boxW, boxH);
+
+            // Right of the box: level then gold (item-style), dropped down.
+            int rightCol = boxCol + boxW + 1;
+            DrawRun(rightCol, top + 1, player.level);
+            DrawCompact(rightCol, top + 3, "💰", player.gold);
+        }
+
+        // emoji  ×  ### (zero-padded to three digits, clamped 0-999) — 5 cells.
+        void DrawCompact(int col, int row, string emoji, int count)
+        {
+            DrawGlyph(col, row, emoji);
+            DrawGlyph(col + 1, row, "×");
+            DrawRun(col + 2, row, Mathf.Clamp(count, 0, 999).ToString("D3"));
+        }
+
+        void DrawBox(int col, int row, int wCells, int hCells)
+        {
+            var r = new Rect(_ox + col * _cw, _oy + row * _ch, wCells * _cw, hCells * _ch);
+            Fill(r, headFill);
+            const float b = 2f;
+            Fill(new Rect(r.x, r.y, r.width, b), headBorder);
+            Fill(new Rect(r.x, r.yMax - b, r.width, b), headBorder);
+            Fill(new Rect(r.x, r.y, b, r.height), headBorder);
+            Fill(new Rect(r.xMax - b, r.y, b, r.height), headBorder);
+        }
+
+        // Draw a run of single-cell characters from (col,row) rightward.
+        void DrawRun(int col, int row, string s)
+        {
+            for (int i = 0; i < s.Length; i++) DrawGlyph(col + i, row, s[i].ToString());
+        }
+
+        // Draw one glyph (string so emoji surrogate pairs stay intact) in one cell.
+        void DrawGlyph(int col, int row, string glyph)
+        {
+            GUI.Label(new Rect(_ox + col * _cw, _oy + row * _ch, _cw, _ch), glyph, _label);
+        }
+
+        // ---------------------------------------------------------------- overlay
+
+        void DrawOverlay(float w, float h)
+        {
             Rect Cell(int c0, int c1, int r0, int r1) =>
-                new(ox + c0 * cw, oy + r0 * ch, (c1 - c0) * cw, (r1 - r0) * ch);
+                new(_ox + c0 * _cw, _oy + r0 * _ch, (c1 - c0) * _cw, (r1 - r0) * _ch);
 
             // Region tints.
             Fill(Cell(0, cols, 0, overscanRows), overscan);
             Fill(Cell(0, cols, rows - overscanRows, rows), overscan);
-            Fill(Cell(0, cols, rows - overscanRows - hudRows, rows - overscanRows), hud);
+            Fill(Cell(0, cols, rows - overscanRows - hudRows, rows - overscanRows), hudStrip);
 
             // Side pillars.
             Fill(Cell(0, sideColumns, 0, rows), pillar);
             Fill(Cell(cols - sideColumns, cols, 0, rows), pillar);
 
-            // Graph-paper grid, over everything.
+            // Graph-paper grid.
             float gt = gridThickness * 0.5f;
-            for (int c = 0; c <= cols; c++) { float gx = ox + c * cw; Fill(new Rect(gx - gt, oy, gridThickness, h), grid); }
-            for (int r = 0; r <= rows; r++) { float gy = oy + r * ch; Fill(new Rect(ox, gy - gt, w, gridThickness), grid); }
+            for (int c = 0; c <= cols; c++) { float gx = _ox + c * _cw; Fill(new Rect(gx - gt, _oy, gridThickness, h), grid); }
+            for (int r = 0; r <= rows; r++) { float gy = _oy + r * _ch; Fill(new Rect(_ox, gy - gt, w, gridThickness), grid); }
 
             // Amber verticals marking the central NES-active columns.
             float margin = (cols - centerColumns) * 0.5f;
             float at = amberThickness * 0.5f;
-            float lx = ox + margin * cw;
-            float rx = ox + (cols - margin) * cw;
-            Fill(new Rect(lx - at, oy, amberThickness, h), amber);
-            Fill(new Rect(rx - at, oy, amberThickness, h), amber);
+            Fill(new Rect(_ox + margin * _cw - at, _oy, amberThickness, h), amber);
+            Fill(new Rect(_ox + (cols - margin) * _cw - at, _oy, amberThickness, h), amber);
         }
 
         void Fill(Rect r, Color c)
