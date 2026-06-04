@@ -5,6 +5,7 @@
 //
 // Placeholder visual: a translucent capsule (a "ghost vehicle" until skinned).
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using NightRider.View;
@@ -21,9 +22,9 @@ namespace NightRider.World
         public Lane lane;
         [Range(0f, 1f)] public float t;
 
-        [Header("Prices (uniform for all items, sell < buy)")]
+        [Header("Fallback prices (used only if there's no PriceMap)")]
         [Min(0)] public int buyPrice = 20;
-        [Min(0)] public int sellPrice = 10;
+        [Min(0)] public int sellPrice = 18;
 
         [Header("Placeholder ghost")]
         public bool showGhost = true;
@@ -42,10 +43,35 @@ namespace NightRider.World
         TradingMenu _menu;
         bool _armed = true;
 
+        // Prices cached from the PriceMap at this post's (fixed) position.
+        readonly Dictionary<ItemType, (int buy, int sell)> _prices = new();
+
         void OnEnable()  { if (!All.Contains(this)) All.Add(this); }
         void OnDisable() { All.Remove(this); }
 
-        void Start() { if (showGhost) BuildGhost(); }
+        void Start()
+        {
+            if (showGhost) BuildGhost();
+            CachePrices();
+        }
+
+        void CachePrices()
+        {
+            _prices.Clear();
+            if (lane == null || !lane.IsValid) return;
+            lane.EvaluateWorld(t, out var pos, out _, out _);
+            var map = FindAnyObjectByType<PriceMap>();
+
+            foreach (ItemType ty in Enum.GetValues(typeof(ItemType)))
+            {
+                int b = map != null ? map.BuyPrice(ty, pos)  : buyPrice;
+                int s = map != null ? map.SellPrice(ty, pos) : sellPrice;
+                _prices[ty] = (b, s);
+            }
+        }
+
+        public int BuyPrice(ItemType t)  => _prices.TryGetValue(t, out var p) ? p.buy  : buyPrice;
+        public int SellPrice(ItemType t) => _prices.TryGetValue(t, out var p) ? p.sell : sellPrice;
 
         void Update()
         {

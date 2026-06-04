@@ -98,7 +98,8 @@ namespace NightRider.View
             for (int i = 0; i < player.items.Count; i++)
             {
                 int d = _delta[i];
-                g += d > 0 ? -d * _post.buyPrice : (-d) * _post.sellPrice;
+                var ty = player.items[i].type;
+                g += d > 0 ? -d * _post.BuyPrice(ty) : (-d) * _post.SellPrice(ty);
             }
             return g;
         }
@@ -167,8 +168,8 @@ namespace NightRider.View
                 Glyph(CEmoji, r, it.emoji, text);
                 Text(CName, r, it.name, text);
                 Text(COwned, r, "x" + it.count, text);
-                Text(CBuy, r, _post.buyPrice.ToString(), dim);
-                Text(CSell, r, isHead ? "-" : _post.sellPrice.ToString(), dim);
+                Text(CBuy, r, _post.BuyPrice(it.type).ToString(), dim);
+                Text(CSell, r, isHead ? "-" : _post.SellPrice(it.type).ToString(), dim);
 
                 string ds = d > 0 ? "+" + d : d.ToString();
                 if (sel) Glyph(CDelta - 2, r, "<", dim);
