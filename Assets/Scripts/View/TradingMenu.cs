@@ -154,6 +154,16 @@ namespace NightRider.View
                 bool isHead = it.type == ItemType.Heads;
 
                 if (sel) Glyph(CCursor, r, ">", good);
+
+                // A collected head reads as completed — collecting heads is the goal.
+                if (isHead && it.count >= 1)
+                {
+                    Glyph(CEmoji, r, it.emoji, good);
+                    Text(CName, r, it.name, good);
+                    Text(COwned, r, "COLLECTED", good);
+                    continue;
+                }
+
                 Glyph(CEmoji, r, it.emoji, text);
                 Text(CName, r, it.name, text);
                 Text(COwned, r, "x" + it.count, text);
