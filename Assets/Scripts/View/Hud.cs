@@ -66,8 +66,12 @@ namespace NightRider.View
         public Color grid     = new(1f, 1f, 1f, 0.15f);
         public Color amber    = new(1f, 0.65f, 0f, 0.85f);
 
+        [Header("Pause")]
+        public Color pauseBack = Color.black;
+
         Texture2D _tex;
         GUIStyle _label;
+        bool _paused;
         float _ox, _oy, _cw, _ch;   // grid origin + cell size, set each OnGUI
 
         void OnGUI()
@@ -89,6 +93,18 @@ namespace NightRider.View
             if (showSafeArea) DrawOverlay(w, h);
             DrawContent();
             DrawPickups();
+            if (_paused) DrawPause();
+        }
+
+        void DrawPause()
+        {
+            const string msg = "PAUSE";
+            int c = (cols - msg.Length) / 2;
+            int r = rows / 2;
+            Fill(new Rect(_ox + (c - 2) * _cw, _oy + (r - 1) * _ch, (msg.Length + 4) * _cw, 3 * _ch), pauseBack);
+            _label.normal.textColor = Color.white;
+            for (int i = 0; i < msg.Length; i++)
+                GUI.Label(new Rect(_ox + (c + i) * _cw, _oy + r * _ch, _cw, _ch), msg[i].ToString(), _label);
         }
 
         void EnsureLabel()
@@ -184,6 +200,13 @@ namespace NightRider.View
 
         void Update()
         {
+            // Start toggles pause (unless the trade menu, which has its own pause, is up).
+            if (!TradingMenu.Active && Controls.Start)
+            {
+                _paused = !_paused;
+                Time.timeScale = _paused ? 0f : 1f;
+            }
+
             if (_pickups.Count == 0) return;
             if (player == null) player = FindAnyObjectByType<PlayerState>();
 

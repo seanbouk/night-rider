@@ -8,7 +8,6 @@
 // One of these in the scene; posts find it. NOTE: OnGUI / Play mode only.
 
 using UnityEngine;
-using UnityEngine.InputSystem;
 using NightRider.World;
 
 namespace NightRider.View
@@ -17,6 +16,7 @@ namespace NightRider.View
     {
         // Frame the menu unpaused on, so the rider can swallow the same EXIT press.
         public static int ClosedFrame = -1;
+        public static bool Active;   // true while a menu is open (pause defers to it)
 
         [Header("Data")]
         public PlayerState player;
@@ -53,12 +53,14 @@ namespace NightRider.View
             _delta = new int[player != null ? player.items.Count : 0];
             _sel = 0;
             IsOpen = true;
+            Active = true;
             Time.timeScale = 0f;
         }
 
         public void Close()
         {
             IsOpen = false;
+            Active = false;
             ClosedFrame = Time.frameCount;
             Time.timeScale = 1f;
         }
@@ -66,17 +68,15 @@ namespace NightRider.View
         void Update()
         {
             if (!IsOpen || player == null) return;
-            var kb = Keyboard.current;
             int n = player.items.Count;
-            if (kb == null || n == 0) return;
+            if (n == 0) return;
 
-            if (kb.upArrowKey.wasPressedThisFrame   || kb.wKey.wasPressedThisFrame) _sel = (_sel - 1 + n) % n;
-            if (kb.downArrowKey.wasPressedThisFrame || kb.sKey.wasPressedThisFrame) _sel = (_sel + 1) % n;
-            if (kb.leftArrowKey.wasPressedThisFrame  || kb.aKey.wasPressedThisFrame) Adjust(-1);
-            if (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame) Adjust(+1);
-
-            if (kb.periodKey.wasPressedThisFrame) TryCommit();   // >  = A = trade
-            if (kb.commaKey.wasPressedThisFrame)  Close();        // <  = B = exit
+            if (Controls.Up)   _sel = (_sel - 1 + n) % n;
+            if (Controls.Down) _sel = (_sel + 1) % n;
+            if (Controls.Left)  Adjust(-1);
+            if (Controls.Right) Adjust(+1);
+            if (Controls.A) TryCommit();   // A / > = trade
+            if (Controls.B) Close();        // B / < = exit
         }
 
         void Adjust(int dir)

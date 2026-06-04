@@ -7,7 +7,6 @@
 // projects onto that lane and slides across (ease-out) while still moving.
 
 using UnityEngine;
-using UnityEngine.InputSystem;
 using NightRider.View;   // Hud (HUD-space pickup FX)
 
 namespace NightRider.World
@@ -70,11 +69,12 @@ namespace NightRider.World
         [Min(0.1f), Tooltip("Size of the start-pose Scene gizmo.")]
         public float startGizmoSize = 8f;
 
-        // Blend state while a hop animates. _blend reaches 1 when settled.
-        Lane _from;
-        float _fromT;
-        float _blend = 1f;
-        float _blendDuration = 0.25f;
+        // Lateral slide for a lane hop: an offset that eases to zero. Captured from
+        // the current visual pose, so rapid re-switches mid-hop don't snap.
+        Vector3 _slideOffset;
+        Quaternion _slideRot;
+        float _slideTime;
+        bool _sliding;
 
         // Speed accelerates from 0 toward `speed`. RoadScroll reads CurrentSpeed.
         float _currentSpeed;
@@ -102,13 +102,11 @@ namespace NightRider.World
 
         void HandleInput()
         {
-            if (_blend < 1f) return;          // ignore input mid-hop
-            var kb = Keyboard.current;
-            if (kb == null || network == null) return;
+            if (network == null) return;
 
             int side = 0;
-            if (kb.leftArrowKey.wasPressedThisFrame || kb.aKey.wasPressedThisFrame) side = -1;
-            else if (kb.rightArrowKey.wasPressedThisFrame || kb.dKey.wasPressedThisFrame) side = +1;
+            if (Controls.Left) side = -1;
+            else if (Controls.Right) side = +1;
             if (side == 0) return;
 
             if (network.TryGetNeighbor(lane, t, side, out var neighbor) && neighbor != null)
@@ -123,21 +121,25 @@ namespace NightRider.World
 
         void SwitchTo(Lane target, float targetT)
         {
-            _from = lane;
-            _fromT = t;
+            // Start the slide from where we visually are now.
+            Vector3 prevPos = transform.position;
+            Quaternion prevRot = transform.rotation;
+
             lane = target;
             t = targetT;
-            _blend = 0f;
-            _blendDuration = Mathf.Max(0.01f, laneChangeTime);
+            target.EvaluateWorld(t, out var pos, out _, out _);
+
+            _slideOffset = prevPos - (pos + Vector3.up * heightOffset);
+            _slideRot = prevRot;
+            _slideTime = 0f;
+            _sliding = true;
         }
 
         // < attacks the lane to the left, > the lane to the right.
         void HandleAttack()
         {
-            var kb = Keyboard.current;
-            if (kb == null) return;
-            if (kb.commaKey.wasPressedThisFrame) Attack(-1);
-            else if (kb.periodKey.wasPressedThisFrame) Attack(+1);
+            if (Controls.B) Attack(-1);        // B / < = attack left
+            else if (Controls.A) Attack(+1);   // A / > = attack right
         }
 
         void Attack(int side)
@@ -228,44 +230,28 @@ namespace NightRider.World
                     if (_currentSpeed > ahead.CurrentSpeed) _currentSpeed = ahead.CurrentSpeed;
                 }
             }
-
-            // Keep the from-lane position advancing too, so the slide stays abreast.
-            if (_from != null)
-            {
-                float lenF = _from.Length;
-                if (lenF > 0.0001f)
-                {
-                    _fromT += _currentSpeed * dt / lenF;
-                    if (_fromT >= 1f && _from.Closed) _fromT -= 1f;
-                }
-            }
         }
 
         void Place(float dt)
         {
             lane.EvaluateWorld(t, out var pos, out var fwd, out _);
-            Vector3 finalPos = pos + Vector3.up * heightOffset;
-            Quaternion finalRot = Upright(fwd, transform.rotation);
+            Vector3 basePos = pos + Vector3.up * heightOffset;
+            Quaternion targetRot = Upright(fwd, transform.rotation);
 
-            if (_blend < 1f && _from != null)
+            if (_sliding)
             {
-                _blend += dt / _blendDuration;
-                _from.EvaluateWorld(_fromT, out var fpos, out var ffwd, out _);
-
-                Vector3 fromPos = fpos + Vector3.up * heightOffset;
-                Quaternion fromRot = Upright(ffwd, finalRot);
-
-                // Ease-out: fast off the line, decelerating into the landing.
-                float x = Mathf.Clamp01(_blend);
-                float e = 1f - Mathf.Pow(1f - x, easeOutPower);
-                finalPos = Vector3.Lerp(fromPos, finalPos, e);
-                finalRot = Quaternion.Slerp(fromRot, finalRot, e);
-
-                if (_blend >= 1f) _from = null;
+                _slideTime += dt;
+                float k = Mathf.Clamp01(_slideTime / Mathf.Max(0.01f, laneChangeTime));
+                float e = 1f - Mathf.Pow(1f - k, easeOutPower);   // ease-out
+                transform.position = basePos + _slideOffset * (1f - e);
+                transform.rotation = Quaternion.Slerp(_slideRot, targetRot, e);
+                if (k >= 1f) _sliding = false;
             }
-
-            transform.position = finalPos;
-            transform.rotation = finalRot;
+            else
+            {
+                transform.position = basePos;
+                transform.rotation = targetRot;
+            }
         }
 
         // Face along travel, but always upright. Forward is flattened to the
