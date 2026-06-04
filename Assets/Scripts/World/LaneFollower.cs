@@ -89,6 +89,7 @@ namespace NightRider.World
 
         void Update()
         {
+            if (Time.timeScale == 0f) return;        // paused (e.g. trading menu open)
             if (lane == null || !lane.IsValid) return;
 
             HandleInput();
