@@ -90,6 +90,7 @@ namespace NightRider.World
         void Update()
         {
             if (Time.timeScale == 0f) return;        // paused (e.g. trading menu open)
+            if (TradingMenu.ClosedFrame == Time.frameCount) return;  // swallow the EXIT press
             if (lane == null || !lane.IsValid) return;
 
             HandleInput();
@@ -148,6 +149,11 @@ namespace NightRider.World
 
             lane.EvaluateWorld(t, out var worldPos, out _, out _);
             float tN = nb.ProjectWorldPoint(worldPos, out _);
+
+            // A trading post on that lane? Open it instead of hitting a carriage.
+            var post = TradingPost.At(nb, tN, attackReach);
+            if (post != null) { post.Trigger(); return; }
+
             var target = Carriage.NearestTo(nb, tN, attackReach);
             if (target == null) return;
 
