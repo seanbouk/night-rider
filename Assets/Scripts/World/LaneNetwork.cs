@@ -75,7 +75,7 @@ namespace NightRider.World
 #endif
         }
 
-        void Start() => Bake();   // runtime: build once, all lanes present
+        // (No Start bake — OnEnable already bakes once, with all lanes loaded.)
 
         // ---------------------------------------------------------------- query
 
@@ -110,7 +110,9 @@ namespace NightRider.World
 
         public void Bake()
         {
-            var sw = logTimings ? System.Diagnostics.Stopwatch.StartNew() : null;
+            // Always timed: the full bake only runs on enter/exit Play (and manual
+            // BakeNow), so logging it measures those transitions without spam.
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
             _linksByLane.Clear();
             _gizmoByLane.Clear();
@@ -131,8 +133,7 @@ namespace NightRider.World
             foreach (var l in lanes) _known.Add(l);
             _dirty.Clear();
 #endif
-            if (sw != null)
-                Debug.Log($"[LaneNetwork] Full bake: {lanes.Count} lanes, {CountLinks()} links, {sw.Elapsed.TotalMilliseconds:F2} ms.", this);
+            Debug.Log($"[LaneNetwork] Full bake: {lanes.Count} lanes, {CountLinks()} links, {sw.Elapsed.TotalMilliseconds:F2} ms.", this);
         }
 
         int CountLinks()
