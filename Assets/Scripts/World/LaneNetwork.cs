@@ -1,26 +1,18 @@
 // Discovers which lanes are navigable neighbours, automatically.
 //
-// For each lane it walks the spline; at each step it finds the nearest other
-// lane that is (a) within a lateral band and (b) heading the same way. Runs of
-// consecutive steps with the same neighbour become an adjacency "region" with a
-// start/end along the lane — so adjacency is regional, not global.
+// Each lane is pre-sampled into a polyline; all sample points go into a 2D
+// spatial grid (cell = maxNeighbourDistance). For each sample we look only at
+// the 9 surrounding cells for the nearest same-direction lane within the lateral
+// band, per side. Runs of consecutive samples with the same neighbour become an
+// adjacency "region" (start/end along the lane).
 //
-// Scaling strategy (so authoring stays fast as the map grows to dozens of lanes):
-//  - Links/gizmos are keyed per from-lane, so any one lane can be recomputed
-//    on its own.
-//  - Each lane caches a world bounding box; the per-sample neighbour search is
-//    broad-phase culled to lanes whose boxes are within maxNeighbourDistance
-//    (turns the cost from ~lanes^2 toward lanes x local-neighbours).
-//  - In the editor an edit recomputes ONLY the changed lane plus the lanes whose
-//    boxes overlap its old/new footprint — so a single edit's cost is bounded by
-//    local density, not total map size. Debounced so a drag updates once.
-// Runtime bakes once. Set logTimings to print bake/update durations.
+// No analytic nearest-point search, so the bake is ~linear in total samples:
+// a full bake is cheap, and it just re-bakes whole on any edit (debounced) and
+// once at runtime. Gizmo connector lines are cached at bake time.
 
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Splines;
-using Unity.Mathematics;
-using Unity.Collections;
 
 namespace NightRider.World
 {
@@ -29,7 +21,7 @@ namespace NightRider.World
     {
         [Header("Sampling")]
         [Min(0.1f), Tooltip("World units between samples along each lane.")]
-        public float sampleSpacing = 1f;
+        public float sampleSpacing = 2f;
 
         [Header("Neighbour test")]
         [Min(0f), Tooltip("Ignore lanes closer than this (avoids self-ish overlaps).")]
@@ -41,7 +33,7 @@ namespace NightRider.World
 
         [Header("Editor")]
         public bool autoRebakeInEditor = true;
-        [Tooltip("Log bake / incremental-update durations to the console.")]
+        [Tooltip("Log each full bake's duration to the console.")]
         public bool logTimings = false;
         public Color leftColor  = new(1f, 0.35f, 0.35f);
         public Color rightColor = new(0.35f, 1f, 0.45f);
@@ -53,10 +45,10 @@ namespace NightRider.World
             public float tStart, tEnd;
         }
 
-        // Keyed by from-lane so a single lane can be recomputed in isolation.
-        readonly Dictionary<Lane, List<Link>> _linksByLane = new();
-        readonly Dictionary<Lane, List<(Vector3 a, Vector3 b, int side)>> _gizmoByLane = new();
-        readonly Dictionary<Lane, Bounds> _bounds = new();
+        readonly List<Link> _links = new();
+        readonly List<(Vector3 a, Vector3 b, int side)> _gizmoSegments = new();
+
+        struct LaneSamples { public Lane lane; public int n; public Vector3[] pos, fwd, right; }
 
         // ---------------------------------------------------------------- lifecycle
 
@@ -75,154 +67,125 @@ namespace NightRider.World
 #endif
         }
 
-        // (No Start bake — OnEnable already bakes once, with all lanes loaded.)
-
         // ---------------------------------------------------------------- query
 
-        /// Neighbour on the given side (-1 left / +1 right) at position t, if any.
         public bool TryGetNeighbor(Lane lane, float t, int side, out Lane neighbor)
         {
+            foreach (var l in _links)
+                if (l.from == lane && l.side == side && t >= l.tStart && t <= l.tEnd) { neighbor = l.to; return true; }
             neighbor = null;
-            if (lane == null || !_linksByLane.TryGetValue(lane, out var links)) return false;
-            foreach (var l in links)
-                if (l.side == side && t >= l.tStart && t <= l.tEnd) { neighbor = l.to; return true; }
             return false;
         }
 
         [ContextMenu("Bake Now")]
-        public void BakeNow()
-        {
-            bool prev = logTimings;
-            logTimings = true;
-            Bake();
-            logTimings = prev;
-        }
+        public void BakeNow() => Bake();
 
-        // ---------------------------------------------------------------- full bake
-
-        List<Lane> CollectLanes()
-        {
-            var list = new List<Lane>();
-            foreach (var l in FindObjectsByType<Lane>())
-                if (l != null && l.IsValid && !l.excludeFromAutoLink) list.Add(l);
-            return list;
-        }
+        // ---------------------------------------------------------------- bake
 
         public void Bake()
         {
-            // Always timed: the full bake only runs on enter/exit Play (and manual
-            // BakeNow), so logging it measures those transitions without spam.
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            _linksByLane.Clear();
-            _gizmoByLane.Clear();
-            _bounds.Clear();
+            _links.Clear();
+            _gizmoSegments.Clear();
 
-            var lanes = CollectLanes();
+            var lanes = new List<Lane>();
+            foreach (var l in FindObjectsByType<Lane>())
+                if (l != null && l.IsValid && !l.excludeFromAutoLink) lanes.Add(l);
+
             if (lanes.Count >= 2)
             {
-                foreach (var l in lanes) _bounds[l] = ComputeWorldBounds(l);
+                // 1) Pre-sample each lane into a flat polyline (pos, flat forward, right).
+                var ls = new LaneSamples[lanes.Count];
+                for (int li = 0; li < lanes.Count; li++)
+                {
+                    var lane = lanes[li];
+                    int n = Mathf.Max(2, Mathf.CeilToInt(lane.Length / sampleSpacing));
+                    var pos = new Vector3[n + 1];
+                    var fwd = new Vector3[n + 1];
+                    var right = new Vector3[n + 1];
+                    for (int i = 0; i <= n; i++)
+                    {
+                        lane.EvaluateWorld(i / (float)n, out var p, out var f, out _);
+                        Vector3 flat = Vector3.ProjectOnPlane(f, Vector3.up);
+                        flat = flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward;
+                        pos[i] = p;
+                        fwd[i] = flat;
+                        right[i] = Vector3.Cross(Vector3.up, flat);   // world up: flat-world, flip-robust
+                    }
+                    ls[li] = new LaneSamples { lane = lane, n = n, pos = pos, fwd = fwd, right = right };
+                }
 
-                var natives = BuildNatives(lanes);
-                try { foreach (var a in lanes) RecomputeLane(a, lanes, natives); }
-                finally { DisposeNatives(natives); }
+                // 2) Spatial grid of every sample point (cell = maxNeighbourDistance).
+                float cell = Mathf.Max(0.1f, maxNeighbourDistance);
+                var grid = new Dictionary<(int, int), List<(int li, int si)>>();
+                for (int li = 0; li < ls.Length; li++)
+                    for (int si = 0; si <= ls[li].n; si++)
+                    {
+                        var key = Cell(ls[li].pos[si], cell);
+                        if (!grid.TryGetValue(key, out var list)) grid[key] = list = new List<(int, int)>();
+                        list.Add((li, si));
+                    }
+
+                // 3) For each sample, nearest same-direction neighbour per side, via the grid.
+                float minD = minNeighbourDistance, maxD = maxNeighbourDistance;
+                for (int li = 0; li < ls.Length; li++)
+                {
+                    var A = ls[li];
+                    var leftLane  = new Lane[A.n + 1];
+                    var rightLane = new Lane[A.n + 1];
+                    var leftPos   = new Vector3[A.n + 1];
+                    var rightPos  = new Vector3[A.n + 1];
+
+                    for (int i = 0; i <= A.n; i++)
+                    {
+                        Vector3 pA = A.pos[i], fA = A.fwd[i], rA = A.right[i];
+                        (int cx, int cz) = Cell(pA, cell);
+                        float bestL = maxD, bestR = maxD;
+
+                        for (int dx = -1; dx <= 1; dx++)
+                        for (int dz = -1; dz <= 1; dz++)
+                        {
+                            if (!grid.TryGetValue((cx + dx, cz + dz), out var bucket)) continue;
+                            foreach (var (lj, sj) in bucket)
+                            {
+                                if (lj == li) continue;
+                                Vector3 pB = ls[lj].pos[sj];
+                                float d = Vector3.Distance(pA, pB);
+                                if (d < minD || d > maxD) continue;
+                                if (Vector3.Dot(fA, ls[lj].fwd[sj]) < headingDotThreshold) continue;   // not same direction
+
+                                if (Vector3.Dot(pB - pA, rA) >= 0f)
+                                {
+                                    if (d < bestR) { bestR = d; rightLane[i] = ls[lj].lane; rightPos[i] = pB; }
+                                }
+                                else
+                                {
+                                    if (d < bestL) { bestL = d; leftLane[i] = ls[lj].lane; leftPos[i] = pB; }
+                                }
+                            }
+                        }
+                    }
+
+                    BuildSpans(A, leftLane, leftPos, -1);
+                    BuildSpans(A, rightLane, rightPos, +1);
+                }
             }
 
 #if UNITY_EDITOR
-            _known.Clear();
-            foreach (var l in lanes) _known.Add(l);
-            _dirty.Clear();
+            _dirty = false;
 #endif
-            Debug.Log($"[LaneNetwork] Full bake: {lanes.Count} lanes, {CountLinks()} links, {sw.Elapsed.TotalMilliseconds:F2} ms.", this);
+            if (logTimings)
+                Debug.Log($"[LaneNetwork] Full bake: {lanes.Count} lanes, {_links.Count} links, {sw.Elapsed.TotalMilliseconds:F2} ms.", this);
         }
 
-        int CountLinks()
+        static (int, int) Cell(Vector3 p, float cell) =>
+            (Mathf.FloorToInt(p.x / cell), Mathf.FloorToInt(p.z / cell));
+
+        // Group consecutive same-neighbour samples into regions (>= 2 samples).
+        void BuildSpans(LaneSamples a, Lane[] perSample, Vector3[] bPos, int side)
         {
-            int c = 0;
-            foreach (var kv in _linksByLane) c += kv.Value.Count;
-            return c;
-        }
-
-        // Recompute one lane's outgoing links + gizmo lines. `natives` must contain
-        // this lane and every lane whose box is within maxNeighbourDistance of it.
-        void RecomputeLane(Lane a, List<Lane> allLanes, Dictionary<Lane, NativeSpline> natives)
-        {
-            _linksByLane.Remove(a);
-            _gizmoByLane.Remove(a);
-            if (a == null || !a.IsValid || a.excludeFromAutoLink) return;
-
-            if (!_bounds.TryGetValue(a, out var ab)) { ab = ComputeWorldBounds(a); _bounds[a] = ab; }
-            Bounds search = ab;
-            search.Expand(2f * maxNeighbourDistance);   // +maxNeighbourDistance each side
-
-            int n = Mathf.Max(2, Mathf.CeilToInt(a.Length / sampleSpacing));
-            var leftAt  = new Lane[n + 1];
-            var rightAt = new Lane[n + 1];
-
-            for (int i = 0; i <= n; i++)
-            {
-                float tA = i / (float)n;
-                a.EvaluateWorld(tA, out var posA, out var fwdA, out _);
-                // World up, not the spline's up: flat world, and a mirrored/reversed
-                // track's up flips (would swap L/R).
-                Vector3 rightDir = Vector3.Cross(Vector3.up, fwdA).normalized;
-
-                float bestLeft = float.MaxValue, bestRight = float.MaxValue;
-
-                foreach (var b in allLanes)
-                {
-                    if (b == a || b == null || !b.IsValid || b.excludeFromAutoLink) continue;
-                    if (!_bounds.TryGetValue(b, out var bb) || !search.Intersects(bb)) continue; // broad-phase cull
-                    if (!natives.TryGetValue(b, out var nb)) continue;
-
-                    // Low resolution: GetNearestPoint subdivides ~sqrt(length)*resolution,
-                    // and our sampleSpacing already bounds the real precision we need.
-                    float d = SplineUtility.GetNearestPoint(nb, (float3)posA, out float3 nearest, out float tB, 2);
-                    if (d < minNeighbourDistance || d > maxNeighbourDistance) continue;
-
-                    Vector3 fwdB = ((Vector3)SplineUtility.EvaluateTangent(nb, tB)).normalized;
-                    if (Vector3.Dot(fwdA, fwdB) < headingDotThreshold) continue; // not same direction
-
-                    Vector3 offset = (Vector3)nearest - posA;
-                    if (Vector3.Dot(offset, rightDir) >= 0f)
-                    {
-                        if (d < bestRight) { bestRight = d; rightAt[i] = b; }
-                    }
-                    else
-                    {
-                        if (d < bestLeft) { bestLeft = d; leftAt[i] = b; }
-                    }
-                }
-            }
-
-            var links = new List<Link>();
-            BuildSpansInto(links, a, n, leftAt, -1);
-            BuildSpansInto(links, a, n, rightAt, +1);
-            if (links.Count == 0) return;
-
-            _linksByLane[a] = links;
-
-            const int steps = 10;
-            var segs = new List<(Vector3, Vector3, int)>();
-            foreach (var l in links)
-            {
-                if (!natives.TryGetValue(l.to, out var nbTo)) continue;
-                for (int s = 0; s <= steps; s++)
-                {
-                    float tA = Mathf.Lerp(l.tStart, l.tEnd, s / (float)steps);
-                    a.EvaluateWorld(tA, out var pa, out _, out _);
-                    SplineUtility.GetNearestPoint(nbTo, (float3)pa, out float3 pb, out _, 2);
-                    segs.Add((pa, (Vector3)pb, l.side));
-                }
-            }
-            _gizmoByLane[a] = segs;
-        }
-
-        // Group consecutive same-neighbour samples into regions. Single-sample
-        // blips are dropped as noise (need at least two samples in a row).
-        void BuildSpansInto(List<Link> into, Lane from, int n, Lane[] perSample, int side)
-        {
-            int i = 0;
+            int n = a.n, i = 0;
             while (i <= n)
             {
                 Lane cur = perSample[i];
@@ -231,60 +194,37 @@ namespace NightRider.World
                 int start = i;
                 while (i <= n && perSample[i] == cur) i++;
                 int end = i - 1;
+                if (end <= start) continue;
 
-                if (end > start)
-                    into.Add(new Link
-                    {
-                        from = from, to = cur, side = side,
-                        tStart = start / (float)n, tEnd = end / (float)n
-                    });
+                _links.Add(new Link { from = a.lane, to = cur, side = side, tStart = start / (float)n, tEnd = end / (float)n });
+
+                int step = Mathf.Max(1, (end - start) / 10);   // ~10 connector lines per span
+                for (int s = start; s <= end; s += step)
+                    _gizmoSegments.Add((a.pos[s], bPos[s], side));
             }
-        }
-
-        // World-space AABB of the lane's spline (SplineUtility extension that
-        // takes a transform and bounds the transformed control points).
-        Bounds ComputeWorldBounds(Lane lane)
-            => lane.Container.Spline.GetBounds(lane.transform.localToWorldMatrix);
-
-        Dictionary<Lane, NativeSpline> BuildNatives(IEnumerable<Lane> set)
-        {
-            var d = new Dictionary<Lane, NativeSpline>();
-            foreach (var l in set)
-            {
-                if (l == null || !l.IsValid || d.ContainsKey(l)) continue;
-                d[l] = new NativeSpline(l.Container.Spline, l.transform.localToWorldMatrix, Allocator.Temp);
-            }
-            return d;
-        }
-
-        void DisposeNatives(Dictionary<Lane, NativeSpline> d)
-        {
-            foreach (var kv in d) kv.Value.Dispose();
         }
 
         void OnDrawGizmos()
         {
-            foreach (var kv in _gizmoByLane)
-                foreach (var seg in kv.Value)
-                {
-                    Gizmos.color = seg.side < 0 ? leftColor : rightColor;
-                    Gizmos.DrawLine(seg.a, seg.b);
-                }
+            foreach (var seg in _gizmoSegments)
+            {
+                Gizmos.color = seg.side < 0 ? leftColor : rightColor;
+                Gizmos.DrawLine(seg.a, seg.b);
+            }
         }
 
-        // ---------------------------------------------------------------- editor: incremental
+        // ---------------------------------------------------------------- editor re-bake
 
 #if UNITY_EDITOR
-        readonly HashSet<Lane> _known = new();
-        readonly HashSet<Lane> _dirty = new();
-        double _lastEditTime;
-        const double RebakeDebounce = 0.12;
+        bool _dirty;
+        double _lastEdit;
+        int _knownCount = -1;
+        const double Debounce = 0.12;
 
         void OnSplineChanged(Spline s, int knot, SplineModification mod)
         {
-            foreach (var l in _known)
-                if (l != null && l.IsValid && l.Container.Spline == s) { _dirty.Add(l); break; }
-            _lastEditTime = UnityEditor.EditorApplication.timeSinceStartup;
+            _dirty = true;
+            _lastEdit = UnityEditor.EditorApplication.timeSinceStartup;
         }
 
         void Update()
@@ -292,101 +232,13 @@ namespace NightRider.World
             if (Application.isPlaying || !autoRebakeInEditor) return;
 
             var lanes = FindObjectsByType<Lane>();
-            var currentSet = new HashSet<Lane>();
-            bool changed = false;
-
+            if (lanes.Length != _knownCount) { _knownCount = lanes.Length; _dirty = true; _lastEdit = UnityEditor.EditorApplication.timeSinceStartup; }
             foreach (var l in lanes)
-            {
-                if (l == null) continue;
-                currentSet.Add(l);
-                if (!_known.Contains(l)) { _dirty.Add(l); changed = true; }
-                if (l.transform.hasChanged) { l.transform.hasChanged = false; _dirty.Add(l); changed = true; }
-            }
+                if (l != null && l.transform.hasChanged) { l.transform.hasChanged = false; _dirty = true; _lastEdit = UnityEditor.EditorApplication.timeSinceStartup; }
 
-            bool removals = false;
-            foreach (var k in _known) if (!currentSet.Contains(k)) { removals = true; break; }
-            if (removals) changed = true;
-
-            if (changed) _lastEditTime = UnityEditor.EditorApplication.timeSinceStartup;
-
-            // Don't bake mid-edit. Wait until: no scene handle is held
-            // (hotControl back to 0), no text field is being typed in
-            // (editingTextField false, i.e. it lost focus), and the final
-            // change has settled.
-            if ((_dirty.Count > 0 || removals) &&
-                GUIUtility.hotControl == 0 &&
-                !UnityEditor.EditorGUIUtility.editingTextField &&
-                UnityEditor.EditorApplication.timeSinceStartup - _lastEditTime > RebakeDebounce)
-            {
-                UpdateIncremental(lanes, currentSet);
-            }
-        }
-
-        void UpdateIncremental(Lane[] lanesArr, HashSet<Lane> currentSet)
-        {
-            var sw = logTimings ? System.Diagnostics.Stopwatch.StartNew() : null;
-
-            var current = new List<Lane>();
-            foreach (var l in lanesArr)
-                if (l != null && l.IsValid && !l.excludeFromAutoLink) current.Add(l);
-
-            // Footprints (expanded) of everything that changed: removed lanes'
-            // old boxes, and dirty lanes' old + new boxes.
-            var regions = new List<Bounds>();
-
-            foreach (var k in _known)
-            {
-                if (currentSet.Contains(k)) continue;             // still here
-                if (_bounds.TryGetValue(k, out var ob)) { var e = ob; e.Expand(2f * maxNeighbourDistance); regions.Add(e); }
-                _bounds.Remove(k);
-                _linksByLane.Remove(k);
-                _gizmoByLane.Remove(k);
-            }
-
-            foreach (var d in _dirty)
-            {
-                if (d == null || !currentSet.Contains(d)) continue;
-                if (_bounds.TryGetValue(d, out var ob)) { var e = ob; e.Expand(2f * maxNeighbourDistance); regions.Add(e); }
-                var nb = ComputeWorldBounds(d);
-                _bounds[d] = nb;
-                var en = nb; en.Expand(2f * maxNeighbourDistance); regions.Add(en);
-            }
-
-            foreach (var l in current)
-                if (!_bounds.ContainsKey(l)) _bounds[l] = ComputeWorldBounds(l);
-
-            // Affected = dirty lanes + any lane whose box overlaps a changed region.
-            var affected = new HashSet<Lane>();
-            foreach (var d in _dirty) if (d != null && currentSet.Contains(d)) affected.Add(d);
-            foreach (var l in current)
-            {
-                if (affected.Contains(l)) continue;
-                var lb = _bounds[l];
-                foreach (var reg in regions) if (reg.Intersects(lb)) { affected.Add(l); break; }
-            }
-
-            if (affected.Count > 0)
-            {
-                // Natives for the affected lanes and any lane they might project onto.
-                var need = new HashSet<Lane>(affected);
-                foreach (var a in affected)
-                {
-                    var sb = _bounds[a]; sb.Expand(2f * maxNeighbourDistance);
-                    foreach (var b in current)
-                        if (b != a && sb.Intersects(_bounds[b])) need.Add(b);
-                }
-
-                var natives = BuildNatives(need);
-                try { foreach (var a in affected) RecomputeLane(a, current, natives); }
-                finally { DisposeNatives(natives); }
-            }
-
-            _known.Clear();
-            foreach (var l in currentSet) _known.Add(l);
-            _dirty.Clear();
-
-            if (sw != null)
-                Debug.Log($"[LaneNetwork] Incremental: {affected.Count} lane(s) recomputed, {CountLinks()} links, {sw.Elapsed.TotalMilliseconds:F2} ms.", this);
+            if (_dirty && GUIUtility.hotControl == 0 && !UnityEditor.EditorGUIUtility.editingTextField
+                && UnityEditor.EditorApplication.timeSinceStartup - _lastEdit > Debounce)
+                Bake();
         }
 #endif
     }
