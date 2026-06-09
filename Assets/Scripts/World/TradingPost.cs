@@ -28,6 +28,12 @@ namespace NightRider.World
 
         [Header("Placeholder ghost")]
         public bool showGhost = true;
+        [Tooltip("2x1 ghost sheet: right = before the head, left = after. (Capsule used if empty.)")]
+        public Texture2D ghostSheet;
+        [Tooltip("Material using NightRider/Apparition with Monotone off (dither, keep colours).")]
+        public Material ghostMaterial;
+        public float spritePixelsPerUnit = 100f;
+        public Vector2 spritePivot = new(0.5f, 0.5f);
         public Color ghostColor = new(1f, 0.85f, 0.2f, 0.35f);
         public Vector3 ghostScale = new(0.8f, 0.8f, 2.0f);
         public float heightOffset = 0.6f;
@@ -132,6 +138,22 @@ namespace NightRider.World
 
         void BuildGhost()
         {
+            // Sprite ghost (billboards + dithers via the material).
+            if (ghostSheet != null)
+            {
+                var sprite = new GameObject("Ghost");
+                sprite.transform.SetParent(transform, false);
+                var sr = sprite.AddComponent<SpriteRenderer>();
+                if (ghostMaterial != null) sr.sharedMaterial = ghostMaterial;
+                var ts = sprite.AddComponent<TradingPostSprite>();
+                ts.sheet = ghostSheet;
+                ts.pixelsPerUnit = spritePixelsPerUnit;
+                ts.pivot = spritePivot;
+                _ghost = sprite.transform;
+                return;
+            }
+
+            // Capsule fallback.
             var root = new GameObject("Ghost");
             root.transform.SetParent(transform, false);
             _ghost = root.transform;

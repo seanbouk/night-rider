@@ -11,6 +11,7 @@ Shader "NightRider/Apparition"
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _GhostDark  ("Ghost dark (blue)",  Color) = (0.15, 0.25, 0.9, 1)
         _GhostLight ("Ghost light (white)", Color) = (0.85, 0.95, 1.0, 1)
+        [ToggleUI] _Monotone ("Monotone recolour", Float) = 1
         _Cutoff     ("Alpha cutoff", Range(0,1)) = 0.5
     }
 
@@ -37,6 +38,7 @@ Shader "NightRider/Apparition"
             CBUFFER_START(UnityPerMaterial)
                 float4 _GhostDark;
                 float4 _GhostLight;
+                float  _Monotone;
                 float  _Cutoff;
             CBUFFER_END
 
@@ -64,9 +66,9 @@ Shader "NightRider/Apparition"
                 float col = (screenX - _HudAreaX) / max(_HudAreaW, 1.0) * 320.0;
                 if (fmod(floor(col), 2.0) >= 1.0) clip(-1);
 
-                // Monotone blue -> white by luminance.
+                // Monotone blue -> white by luminance, or keep the sprite's colours.
                 float lum = dot(tex.rgb, float3(0.299, 0.587, 0.114));
-                half3 c = lerp(_GhostDark.rgb, _GhostLight.rgb, lum);
+                half3 c = _Monotone > 0.5 ? lerp(_GhostDark.rgb, _GhostLight.rgb, lum) : tex.rgb;
                 return half4(c, 1.0);
             }
             ENDHLSL

@@ -17,12 +17,22 @@ Cursed and headless, you roam the night on horseback. The world is open and the 
 
 ## Status
 
-🚧 Early stub. Project scaffolding only — design and systems to come.
+🚗 Playable vertical slice — core systems built:
+
+- **Navigation** — closed-loop lanes (Unity Splines), auto-discovered same-direction adjacency, snappy lane-jumping. Junctions are roundabouts; no forks or overpasses.
+- **Super-scaler look** — speed-driven, view-correct scrolling road shader; animated self-illuminated sprites; black background.
+- **Rider** — animated horseman sprite + a ghostly NES-dithered `<`/`>` attack apparition.
+- **Traffic** — directional carriage sprites spawned ahead in your lane + neighbours; rear-end + attack; energy → wrecks → lupin pickups.
+- **Economy** — lane-pinned trading-post ghosts; full-screen keyboard trade menu (build a basket, A/B, heads buy-once); Perlin `PriceMap` (per-good, per-location prices) with a Scene-view heatmap.
+- **Input** — unified keyboard + joypad (`Controls`); Start = pause.
+
+Still ahead: the **head-recovery progression** that ties it into a game (and head→music), then level building and the rest of the art.
 
 ## Tech
 
-- **Engine:** Unity (URP)
-- **Input:** Unity Input System
+- **Engine:** Unity 6 (URP). Assets via Git LFS.
+- **Input:** Unity Input System.
+- Code lives in `Assets/Scripts/` (`World/` = sim, `View/` = presentation), shaders in `Assets/Shaders/`, art in `Assets/Art/`.
 
 ## Getting Started
 
