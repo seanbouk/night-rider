@@ -1,0 +1,78 @@
+// Plays a horizontal sprite sheet (N x 1 frames) on a SpriteRenderer, slicing the
+// frames in code (no Sprite Editor needed). Billboards to the camera for the
+// super-scaler look and renders unlit (self-illuminated). Can hide a placeholder
+// mesh (the capsule) with a debug toggle to bring it back.
+
+using UnityEngine;
+
+namespace NightRider.View
+{
+    [RequireComponent(typeof(SpriteRenderer))]
+    public class SpriteSheetAnimator : MonoBehaviour
+    {
+        [Header("Sheet")]
+        public Texture2D sheet;
+        [Min(1)] public int frames = 6;
+        public float fps = 12f;
+        public float pixelsPerUnit = 100f;
+        public Vector2 pivot = new(0.5f, 0.5f);   // 0.5,0 = bottom-centre (sits on the road)
+
+        [Header("Look")]
+        [Tooltip("Always face the camera (screen-space billboard).")]
+        public bool billboard = true;
+        [Tooltip("Self-illuminated (unlit) — ignores scene lighting.")]
+        public bool unlit = true;
+
+        [Header("Debug")]
+        [Tooltip("Optional placeholder mesh to hide (e.g. the capsule).")]
+        public Renderer debugMesh;
+        public bool showDebugMesh = false;
+
+        SpriteRenderer _sr;
+        Sprite[] _sprites;
+        float _t;
+        Camera _cam;
+
+        void Awake()
+        {
+            _sr = GetComponent<SpriteRenderer>();
+
+            if (unlit)
+            {
+                var sh = Shader.Find("Sprites/Default");   // built-in, unlit
+                if (sh != null) _sr.sharedMaterial = new Material(sh);
+            }
+            Slice();
+        }
+
+        void Slice()
+        {
+            if (sheet == null || frames < 1) return;
+            _sprites = new Sprite[frames];
+            float w = sheet.width / (float)frames;
+            float h = sheet.height;
+            for (int i = 0; i < frames; i++)
+                _sprites[i] = Sprite.Create(sheet, new Rect(i * w, 0f, w, h), pivot, pixelsPerUnit);
+            _sr.sprite = _sprites[0];
+        }
+
+        void LateUpdate()
+        {
+            if (_sprites != null && _sprites.Length > 0 && fps > 0f)
+            {
+                _t += Time.deltaTime * fps;
+                if (_t >= _sprites.Length) _t %= _sprites.Length;
+                _sr.sprite = _sprites[(int)_t];
+            }
+
+            if (billboard)
+            {
+                if (_cam == null) _cam = Camera.main;
+                if (_cam != null) transform.rotation = _cam.transform.rotation;
+            }
+
+            if (debugMesh != null && debugMesh.enabled != showDebugMesh)
+                debugMesh.enabled = showDebugMesh;
+        }
+    }
+}
