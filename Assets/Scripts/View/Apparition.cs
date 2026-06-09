@@ -12,20 +12,20 @@ namespace NightRider.View
     {
         SpriteRenderer _sr;
         SpriteSheetAnimator _source;
-        Vector3 _startPos, _dir;
-        float _reach, _life, _t;
+        Transform _follow;
+        float _side, _reach, _life, _t;
         Camera _cam;
 
-        public void Init(SpriteSheetAnimator source, Vector3 startPos, Vector3 dir, float reach, float life, int sortingOrder)
+        public void Init(SpriteSheetAnimator source, Transform follow, int side, float reach, float life, int sortingOrder)
         {
             _sr = GetComponent<SpriteRenderer>();
             _sr.sortingOrder = sortingOrder;        // behind the rider
             _source = source;
-            _startPos = startPos;
-            _dir = dir.normalized;
+            _follow = follow;
+            _side = side;
             _reach = reach;
             _life = Mathf.Max(0.05f, life);
-            transform.position = startPos;
+            if (follow != null) transform.position = follow.position;
         }
 
         void LateUpdate()
@@ -33,9 +33,11 @@ namespace NightRider.View
             _t += Time.deltaTime;
 
             // Shoot out laterally, reaching full distance by half-life (ease-out).
+            // Tracks the rider's current pose, so it stays level / abreast.
             float shoot = Mathf.Clamp01(_t / (_life * 0.5f));
             float e = 1f - Mathf.Pow(1f - shoot, 3f);
-            transform.position = _startPos + _dir * (_reach * e);
+            if (_follow != null)
+                transform.position = _follow.position + _follow.right * (_side * _reach * e);
 
             // Mirror the rider's current frame.
             if (_source != null && _source.CurrentSprite != null) _sr.sprite = _source.CurrentSprite;

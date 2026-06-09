@@ -61,6 +61,8 @@ namespace NightRider.World
         public Material apparitionMaterial;
         [Min(0.05f), Tooltip("Seconds the apparition lives (shoots out, then flashes).")]
         public float apparitionLife = 0.4f;
+        [Min(0f), Tooltip("How far the apparition shoots to the side.")]
+        public float apparitionReach = 4f;
 
         [Header("Lane switching")]
         [Min(0.01f), Tooltip("Seconds to slide across when hopping to a neighbour.")]
@@ -177,7 +179,7 @@ namespace NightRider.World
             var go = new GameObject("Apparition");
             go.AddComponent<SpriteRenderer>().sharedMaterial = apparitionMaterial;
             go.AddComponent<Apparition>()
-              .Init(riderSprite, transform.position, transform.right * side, attackReach, apparitionLife, riderSprite.SortingOrder - 1);
+              .Init(riderSprite, transform, side, apparitionReach, apparitionLife, riderSprite.SortingOrder - 1);
         }
 
         void Advance(float dt)
