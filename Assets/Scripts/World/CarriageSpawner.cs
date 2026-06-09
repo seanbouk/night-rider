@@ -1,12 +1,14 @@
-// Populates the world with carriages around the rider: spawns them some distance
-// ahead of the camera on nearby lanes, and despawns them once they fall behind.
+// Spawns carriages ahead of the rider in its current and adjacent lanes, and
+// culls them once they fall behind the camera. Spawning is rider-relative (a
+// fixed distance ahead on a chosen lane), so density stays steady on long lanes
+// and we never spawn oncoming traffic (adjacency is same-direction only).
 //
-// With no prefab assigned it builds a placeholder: a capsule, lying longways
-// (longer than the rider), tinted a random green/blue/red. Drop a real carriage
-// prefab in the slot later to replace it.
+// Visual: a carriage sprite (cols x rows sheet) — random colour row, side-based
+// column. Falls back to a capsule if no sheet is assigned.
 
 using System.Collections.Generic;
 using UnityEngine;
+using NightRider.View;
 
 namespace NightRider.World
 {
@@ -14,29 +16,33 @@ namespace NightRider.World
     {
         [Header("Refs")]
         public LaneFollower rider;
-        [Tooltip("Viewpoint used for spawn-ahead / despawn-behind. Defaults to main camera.")]
+        public LaneNetwork network;
+        [Tooltip("Viewpoint for despawn-behind. Defaults to main camera.")]
         public Transform view;
-        [Tooltip("Optional carriage prefab (needs a Carriage component). If empty, a coloured capsule is built.")]
-        public GameObject carriagePrefab;
 
         [Header("Population")]
         [Min(0)] public int maxCarriages = 8;
-        [Min(1f), Tooltip("How far in front of the camera to spawn.")]
-        public float spawnAhead = 60f;
+        [Min(1f), Tooltip("How far ahead of the rider (along the lane) to spawn.")]
+        public float spawnAhead = 50f;
         [Min(0f), Tooltip("Distance behind the camera at which to cull a carriage.")]
         public float despawnBehind = 25f;
         [Min(0.05f), Tooltip("Seconds between spawn attempts.")]
-        public float spawnInterval = 0.5f;
+        public float spawnInterval = 0.4f;
+        [Min(0f), Tooltip("Don't spawn within this distance of existing traffic.")]
+        public float occupyClearance = 6f;
 
-        [Header("Carriage settings")]
-        [Range(0f, 1f), Tooltip("Carriage cruise speed as a fraction of the rider's.")]
-        public float speedFraction = 0.5f;
+        [Header("Carriage")]
+        [Range(0f, 1f)] public float speedFraction = 0.5f;
         [Min(0f)] public float acceleration = 8f;
-        [Min(0f), Tooltip("How hard a wreck brakes to a stop (units/s^2). Higher = stops sooner.")]
-        public float wreckBrake = 40f;
+        [Min(0f)] public float wreckBrake = 40f;
         public float heightOffset = 0.4f;
-        [Tooltip("Placeholder visual scale (longer than the rider along travel).")]
-        public Vector3 visualScale = new(0.7f, 0.7f, 1.8f);
+
+        [Header("Sprite")]
+        public Texture2D carriageSheet;
+        public int sheetCols = 3, sheetRows = 4;
+        public float pixelsPerUnit = 100f;
+        public Vector2 pivot = new(0.5f, 0.5f);
+        public float sameLaneThreshold = 3f;
 
         readonly List<Carriage> _spawned = new();
         float _timer;
@@ -44,11 +50,12 @@ namespace NightRider.World
         void OnEnable()
         {
             if (view == null && Camera.main != null) view = Camera.main.transform;
+            if (network == null) network = FindAnyObjectByType<LaneNetwork>();
         }
 
         void Update()
         {
-            if (rider == null || view == null) return;
+            if (rider == null) return;
 
             Despawn();
 
@@ -62,6 +69,7 @@ namespace NightRider.World
 
         void Despawn()
         {
+            if (view == null) return;
             Vector3 camPos = view.position, camFwd = view.forward;
             for (int i = _spawned.Count - 1; i >= 0; i--)
             {
@@ -77,59 +85,43 @@ namespace NightRider.World
 
         void TrySpawn()
         {
-            var lanes = FindObjectsByType<Lane>();
-            if (lanes.Length == 0) return;
+            var here = rider.lane;
+            if (here == null || !here.IsValid) return;
 
-            var lane = lanes[Random.Range(0, lanes.Length)];
-            if (lane == null || !lane.IsValid) return;
-            if (!FindSpawnT(lane, out float t)) return;
-            if (Carriage.Occupied(lane, t, visualScale.z * 2f)) return;   // don't stack on traffic
+            // Pick the current lane (0) or a neighbour (-1 / +1).
+            int side = Random.Range(0, 3) - 1;
+            Lane lane;
+            float baseT;
+            if (side == 0)
+            {
+                lane = here;
+                baseT = rider.t;
+            }
+            else
+            {
+                if (network == null || !network.TryGetNeighbor(here, rider.t, side, out lane) || lane == null || !lane.IsValid)
+                    return;
+                here.EvaluateWorld(rider.t, out var rpos, out _, out _);
+                baseT = lane.ProjectWorldPoint(rpos, out _);
+            }
+
+            float len = lane.Length;
+            if (len < 0.0001f) return;
+
+            float t = baseT + spawnAhead / len;
+            if (lane.Closed) t -= Mathf.Floor(t);
+            else if (t > 1f) return;
+
+            if (Carriage.Occupied(lane, t, occupyClearance)) return;
 
             Spawn(lane, t);
         }
 
-        // A point on the lane that's in front of the camera at roughly spawnAhead.
-        bool FindSpawnT(Lane lane, out float t)
-        {
-            t = 0f;
-            Vector3 camPos = view.position, camFwd = view.forward;
-            float len = lane.Length;
-            int n = Mathf.Clamp(Mathf.CeilToInt(len / 4f), 16, 256);
-
-            float best = float.MaxValue;
-            bool found = false;
-            for (int i = 0; i < n; i++)
-            {
-                float tt = i / (float)n;
-                lane.EvaluateWorld(tt, out var p, out _, out _);
-                float forward = Vector3.Dot(p - camPos, camFwd);
-                if (forward <= 0f) continue;                  // must be ahead of the camera
-                float err = Mathf.Abs(forward - spawnAhead);
-                if (err < best) { best = err; t = tt; found = true; }
-            }
-            return found && best < spawnAhead;                // within a sensible band
-        }
-
         void Spawn(Lane lane, float t)
         {
-            GameObject go;
-            if (carriagePrefab != null)
-            {
-                go = Instantiate(carriagePrefab);
-            }
-            else
-            {
-                go = new GameObject("Carriage");
-                var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                Destroy(visual.GetComponent<Collider>());
-                visual.transform.SetParent(go.transform, false);
-                visual.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);  // lie longways
-                visual.transform.localScale = visualScale;
-                visual.GetComponent<MeshRenderer>().material.color = RandomColor();
-            }
+            var go = new GameObject("Carriage");
 
-            var car = go.GetComponent<Carriage>();
-            if (car == null) car = go.AddComponent<Carriage>();
+            var car = go.AddComponent<Carriage>();
             car.lane = lane;
             car.t = t;
             car.idealSpeed = (rider != null ? rider.speed : 12f) * speedFraction;
@@ -137,17 +129,31 @@ namespace NightRider.World
             car.wreckBrake = wreckBrake;
             car.heightOffset = heightOffset;
 
-            _spawned.Add(car);
-        }
+            var vis = new GameObject("Visual");
+            vis.transform.SetParent(go.transform, false);
 
-        static Color RandomColor()
-        {
-            switch (Random.Range(0, 3))
+            if (carriageSheet != null)
             {
-                case 0:  return new Color(0.20f, 0.70f, 0.25f); // green
-                case 1:  return new Color(0.20f, 0.45f, 0.85f); // blue
-                default: return new Color(0.85f, 0.20f, 0.20f); // red
+                vis.AddComponent<SpriteRenderer>();
+                var cs = vis.AddComponent<CarriageSprite>();
+                cs.sheet = carriageSheet;
+                cs.cols = sheetCols;
+                cs.rows = sheetRows;
+                cs.pixelsPerUnit = pixelsPerUnit;
+                cs.pivot = pivot;
+                cs.sameLaneThreshold = sameLaneThreshold;
+                cs.rider = rider;
             }
+            else
+            {
+                var cap = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                Destroy(cap.GetComponent<Collider>());
+                cap.transform.SetParent(vis.transform, false);
+                cap.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                cap.transform.localScale = new Vector3(0.7f, 0.7f, 1.8f);
+            }
+
+            _spawned.Add(car);
         }
     }
 }
