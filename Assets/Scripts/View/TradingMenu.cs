@@ -77,14 +77,19 @@ namespace NightRider.View
         void Adjust(int dir)
         {
             var it = player.items[_sel];
-            int d = _delta[_sel] + dir;
+            int prev = _delta[_sel];
+            int d = prev + dir;
 
             if (it.type == ItemType.Heads)
                 d = Mathf.Clamp(d, 0, Mathf.Max(0, 1 - it.count));   // buy-only, one, kept forever
             else if (d < -it.count)
                 d = -it.count;                                       // can't oversell
 
+            // Can't buy more than the basket can afford — refuse any change that
+            // would put projected gold in the red (no debt). prev was affordable,
+            // so reverting to it is always safe.
             _delta[_sel] = d;
+            if (player.gold + GoldChange() < 0) _delta[_sel] = prev;
         }
 
         int GoldChange()
