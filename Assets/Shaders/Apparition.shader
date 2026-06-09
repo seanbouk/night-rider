@@ -3,6 +3,12 @@
 // blending — instead it CLIPS every other SCREEN column, where the screen is the
 // 320px-wide 4:3 active area (published by the Hud as _HudAreaX/_HudAreaW). The
 // sprite's transparent background is also a hard cutout.
+//
+// _Flicker swaps which columns (odd vs even) are kept each frame, driven by the
+// Hud's per-frame _GhostFlicker parity. The attack flashes by so the static
+// half-stripe reads fine, but a stationary ghost (the trading post) shows
+// permanent gaps — flickering reveals the whole sprite across two frames so it
+// reads as a shimmering full image instead of fixed vertical bars.
 
 Shader "NightRider/Apparition"
 {
@@ -12,6 +18,7 @@ Shader "NightRider/Apparition"
         _GhostDark  ("Ghost dark (blue)",  Color) = (0.15, 0.25, 0.9, 1)
         _GhostLight ("Ghost light (white)", Color) = (0.85, 0.95, 1.0, 1)
         [ToggleUI] _Monotone ("Monotone recolour", Float) = 1
+        [ToggleUI] _Flicker  ("Flicker columns each frame", Float) = 0
         _Cutoff     ("Alpha cutoff", Range(0,1)) = 0.5
     }
 
@@ -39,11 +46,13 @@ Shader "NightRider/Apparition"
                 float4 _GhostDark;
                 float4 _GhostLight;
                 float  _Monotone;
+                float  _Flicker;
                 float  _Cutoff;
             CBUFFER_END
 
-            float _HudAreaX;   // screen x (px) of the 4:3 area's left edge
-            float _HudAreaW;   // 4:3 area width (px)
+            float _HudAreaX;     // screen x (px) of the 4:3 area's left edge
+            float _HudAreaW;     // 4:3 area width (px)
+            float _GhostFlicker; // per-frame parity (0/1), published by the Hud
 
             Varyings vert (Attributes IN)
             {
@@ -64,7 +73,8 @@ Shader "NightRider/Apparition"
                 float2 sp = IN.screenPos.xy / max(IN.screenPos.w, 1e-5);
                 float screenX = sp.x * _ScreenParams.x;
                 float col = (screenX - _HudAreaX) / max(_HudAreaW, 1.0) * 320.0;
-                if (fmod(floor(col), 2.0) >= 1.0) clip(-1);
+                float phase = _Flicker > 0.5 ? _GhostFlicker : 0.0;     // swap kept columns each frame
+                if (fmod(floor(col) + phase, 2.0) >= 1.0) clip(-1);
 
                 // Monotone blue -> white by luminance, or keep the sprite's colours.
                 float lum = dot(tex.rgb, float3(0.299, 0.587, 0.114));

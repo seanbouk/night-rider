@@ -106,6 +106,11 @@ namespace NightRider.View
             else                  { w = sw; h = w / aspect; }
             Shader.SetGlobalFloat("_HudAreaX", (sw - w) * 0.5f);
             Shader.SetGlobalFloat("_HudAreaW", w);
+
+            // Per-frame parity for the ghost shader's _Flicker option: swaps which
+            // columns (odd/even) survive each frame so a stationary ghost reads as a
+            // full shimmering sprite instead of fixed vertical gaps.
+            Shader.SetGlobalFloat("_GhostFlicker", Time.frameCount & 1);
         }
 
         void DrawPause()
