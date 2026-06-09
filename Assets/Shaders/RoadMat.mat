@@ -37,6 +37,14 @@ Material:
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _GrassTex:
+        m_Texture: {fileID: 2800000, guid: bd3e6b7b0791cee42844c59c94b8bab0, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _TracksTex:
+        m_Texture: {fileID: 2800000, guid: 7174abfe6f21f6c41af986855f0acee9, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _BaseMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -128,6 +136,8 @@ Material:
     - _SrcBlendAlpha: 1
     - _Surface: 0
     - _Tiling: 0.1
+    - _TracksCut: 0.5
+    - _GrassCut: 0.5
     - _WorkflowMode: 1
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
@@ -137,5 +147,9 @@ Material:
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _LineColor: {r: 0.85, g: 0.8, b: 0.45, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
+    - _TracksColor: {r: 0.42452827, g: 0.26988488, b: 0.16620678, a: 1}
+    - _GrassColor: {r: 0.2, g: 0.55, b: 0.2, a: 1}
+    - _TracksTiling: {r: 1, g: 0.1, b: 0, a: 0}
+    - _GrassTiling: {r: 1, g: 0.1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
