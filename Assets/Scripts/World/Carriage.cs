@@ -44,7 +44,12 @@ namespace NightRider.World
         Renderer _renderer;
 
         void OnEnable()  { if (!All.Contains(this)) All.Add(this); CurrentSpeed = idealSpeed; _renderer = GetComponentInChildren<Renderer>(); }
-        void OnDisable() { All.Remove(this); }
+        void OnDisable()
+        {
+            All.Remove(this);
+            if (_barBack != null) _barBack.enabled = false;
+            if (_barFill != null) _barFill.enabled = false;
+        }
 
         // Rider rear-ended us: lose energy. At zero we become a wreck — coast to a
         // stop (idealSpeed 0), dim to half-bright, and stop colliding (everyone
@@ -193,32 +198,55 @@ namespace NightRider.World
         }
 
         // Energy bar above the carriage (screen-projected) while it's damaged but
-        // still alive. Hidden at full energy and once wrecked.
-        void OnGUI()
-        {
-            if (_destroyed || energy >= 1f) return;
-            var cam = Camera.main;
-            if (cam == null) return;
+        // still alive — two pooled Images on the screen-space UiCanvas, so the CRT
+        // pass covers them. Hidden at full energy and once wrecked.
+        UnityEngine.UI.Image _barBack, _barFill;
 
-            Vector3 sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 3f);
-            if (sp.z <= 0f) return;
+        void LateUpdate()
+        {
+            var ui = UiCanvas.Instance;
+            var cam = ui.Cam;
+            bool show = !_destroyed && energy < 1f && cam != null;
+
+            Vector3 sp = default;
+            if (show)
+            {
+                sp = cam.WorldToScreenPoint(transform.position + Vector3.up * 3f);
+                if (sp.z <= 0f) show = false;
+            }
+
+            if (!show)
+            {
+                if (_barBack != null) _barBack.enabled = false;
+                if (_barFill != null) _barFill.enabled = false;
+                return;
+            }
+
+            EnsureBar(ui);
+            if (!ui.ScreenToFrame(ui.WorldBars, new Vector3(sp.x, sp.y, 0f), out var local)) return;
 
             const float w = 44f, h = 5f;
-            float x = sp.x - w * 0.5f;
-            float y = Screen.height - sp.y;
-            BarFill(new Rect(x, y, w, h), barBack);
-            BarFill(new Rect(x, y, w * Mathf.Clamp01(energy), h), barFill);
+            _barBack.enabled = _barFill.enabled = true;
+            _barBack.rectTransform.anchoredPosition = local;
+            _barBack.rectTransform.sizeDelta = new Vector2(w, h);
+            _barFill.rectTransform.anchoredPosition = new Vector2(local.x - w * 0.5f, local.y);   // left-aligned
+            _barFill.rectTransform.sizeDelta = new Vector2(w * Mathf.Clamp01(energy), h);
         }
 
-        static Texture2D _white;
-        static void BarFill(Rect r, Color c)
+        void EnsureBar(UiCanvas ui)
         {
-            if (_white == null)
+            if (_barBack == null) _barBack = UiCanvas.MakeImage(ui.WorldBars, barBack);
+            if (_barFill == null)
             {
-                _white = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
-                _white.SetPixel(0, 0, Color.white); _white.Apply();
+                _barFill = UiCanvas.MakeImage(ui.WorldBars, barFill);
+                _barFill.rectTransform.pivot = new Vector2(0f, 0.5f);   // grow from the left edge
             }
-            var prev = GUI.color; GUI.color = c; GUI.DrawTexture(r, _white); GUI.color = prev;
+        }
+
+        void OnDestroy()
+        {
+            if (_barBack != null) Destroy(_barBack.gameObject);
+            if (_barFill != null) Destroy(_barFill.gameObject);
         }
     }
 }

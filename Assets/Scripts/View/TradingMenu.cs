@@ -1,11 +1,13 @@
-// Full-screen trading menu on the 40x30 HUD grid. Opened by a TradingPost; it
-// pauses the game (Time.timeScale = 0). Keyboard-only, mapping to a joypad:
+// Full-screen trading menu on the 40x30 UI grid, drawn via the screen-space
+// UiCanvas (so the CRT pass covers it). Opened by a TradingPost; it pauses the
+// game (Time.timeScale = 0). Keyboard-only, mapping to a joypad:
 //   Up/Down (W/S)    - select item
 //   Left/Right (A/D) - sell (-) / buy (+) the selected item (arrows hint this)
 //   >  (A button)    - TRADE
 //   <  (B button)    - EXIT
 //
-// One of these in the scene; posts find it. NOTE: OnGUI / Play mode only.
+// One of these in the scene; posts find it. The opaque backdrop is drawn by
+// UiCanvas (MenuRoot); this only fills in the grid text + selection highlight.
 
 using UnityEngine;
 using NightRider.World;
@@ -23,12 +25,7 @@ namespace NightRider.View
         [Tooltip("Font for glyphs. Assign an emoji-capable font if emoji show as boxes.")]
         public Font font;
 
-        [Header("Grid")]
-        public int cols = 40;
-        public int rows = 30;
-
         [Header("Colours")]
-        public Color background = new(0.06f, 0.05f, 0.10f, 1f);
         public Color text = Color.white;
         public Color dim  = new(0.7f, 0.7f, 0.75f, 1f);
         public Color good = new(0.4f, 1f, 0.5f, 1f);
@@ -40,9 +37,7 @@ namespace NightRider.View
         TradingPost _post;
         int[] _delta;
         int _sel;
-        Texture2D _tex;
-        GUIStyle _label;
-        float _ox, _oy, _cw, _ch;
+        GlyphGrid _menu;
 
         const int CCursor = 3, CEmoji = 5, CName = 7, COwned = 14, CBuy = 19, CSell = 24, CDelta = 31;
 
@@ -119,62 +114,61 @@ namespace NightRider.View
             System.Array.Clear(_delta, 0, _delta.Length);
         }
 
-        void OnGUI()
+        // ----------------------------------------------------------- drawing
+
+        void LateUpdate()
         {
-            if (!IsOpen || player == null || _post == null) return;
-            GUI.depth = -100;
+            var ui = UiCanvas.Instance;
+            _menu ??= new GlyphGrid(ui, ui.MenuFrame, font);
 
-            const float aspect = 4f / 3f;
-            float sw = Screen.width, sh = Screen.height, w, h;
-            if (sw / sh > aspect) { h = sh; w = h * aspect; }
-            else                  { w = sw; h = w / aspect; }
-            _ox = (sw - w) * 0.5f; _oy = (sh - h) * 0.5f;
-            _cw = w / cols; _ch = h / rows;
+            bool open = IsOpen && player != null && _post != null;
+            if (ui.MenuRoot.gameObject.activeSelf != open) ui.MenuRoot.gameObject.SetActive(open);
+            if (!open) { _menu.Begin(); _menu.End(); return; }
 
-            EnsureStyle();
-            Fill(new Rect(0, 0, sw, sh), background);
+            int cols = ui.cols;
+            _menu.Begin();
 
             string title = _post.postName;
-            Text((cols - title.Length) / 2, 2, title, text);
+            _menu.Run((cols - title.Length) / 2, 2, title, text);
 
-            Text(CName,  5, "ITEM",  dim);
-            Text(COwned, 5, "HAVE",  dim);
-            Text(CBuy,   5, "BUY",   dim);
-            Text(CSell,  5, "SELL",  dim);
-            Text(CDelta, 5, "TRADE", dim);
+            _menu.Run(CName,  5, "ITEM",  dim);
+            _menu.Run(COwned, 5, "HAVE",  dim);
+            _menu.Run(CBuy,   5, "BUY",   dim);
+            _menu.Run(CSell,  5, "SELL",  dim);
+            _menu.Run(CDelta, 5, "TRADE", dim);
 
             var items = player.items;
             for (int i = 0; i < items.Count; i++)
             {
                 int r = 7 + i * 2;
                 bool sel = i == _sel;
-                if (sel) Fill(CellRect(CCursor, r, CDelta + 5 - CCursor, 1), highlight);
+                if (sel) _menu.Fill(CCursor, r, CDelta + 5 - CCursor, 1, highlight);
 
                 var it = items[i];
                 int d = _delta[i];
                 bool isHead = it.type == ItemType.Heads;
 
-                if (sel) Glyph(CCursor, r, ">", good);
+                if (sel) _menu.Glyph(CCursor, r, ">", good);
 
                 // A collected head reads as completed — collecting heads is the goal.
                 if (isHead && it.count >= 1)
                 {
-                    Glyph(CEmoji, r, it.emoji, good);
-                    Text(CName, r, it.name, good);
-                    Text(COwned, r, "COLLECTED", good);
+                    _menu.Glyph(CEmoji, r, it.emoji, good);
+                    _menu.Run(CName, r, it.name, good);
+                    _menu.Run(COwned, r, "COLLECTED", good);
                     continue;
                 }
 
-                Glyph(CEmoji, r, it.emoji, text);
-                Text(CName, r, it.name, text);
-                Text(COwned, r, "x" + it.count, text);
-                Text(CBuy, r, _post.BuyPrice(it.type).ToString(), dim);
-                Text(CSell, r, isHead ? "-" : _post.SellPrice(it.type).ToString(), dim);
+                _menu.Glyph(CEmoji, r, it.emoji, text);
+                _menu.Run(CName, r, it.name, text);
+                _menu.Run(COwned, r, "x" + it.count, text);
+                _menu.Run(CBuy, r, _post.BuyPrice(it.type).ToString(), dim);
+                _menu.Run(CSell, r, isHead ? "-" : _post.SellPrice(it.type).ToString(), dim);
 
                 string ds = d > 0 ? "+" + d : d.ToString();
-                if (sel) Glyph(CDelta - 2, r, "<", dim);
-                Text(CDelta, r, ds, d == 0 ? dim : text);
-                if (sel) Glyph(CDelta + ds.Length + 1, r, ">", dim);
+                if (sel) _menu.Glyph(CDelta - 2, r, "<", dim);
+                _menu.Run(CDelta, r, ds, d == 0 ? dim : text);
+                if (sel) _menu.Glyph(CDelta + ds.Length + 1, r, ">", dim);
             }
 
             int change = GoldChange();
@@ -182,47 +176,13 @@ namespace NightRider.View
             bool valid = result >= 0;
 
             int row = 7 + items.Count * 2 + 1;
-            Text(CName, row,     "NET " + (change >= 0 ? "+" : "") + change, change >= 0 ? good : bad);
-            Text(CName, row + 1, "GOLD " + player.gold + " -> " + result, valid ? text : bad);
+            _menu.Run(CName, row,     "NET " + (change >= 0 ? "+" : "") + change, change >= 0 ? good : bad);
+            _menu.Run(CName, row + 1, "GOLD " + player.gold + " -> " + result, valid ? text : bad);
 
-            Text(CName,      row + 3, "A TRADE", (valid && AnyDelta()) ? good : dim);
-            Text(CName + 10, row + 3, "B EXIT",  text);
-        }
+            _menu.Run(CName,      row + 3, "A TRADE", (valid && AnyDelta()) ? good : dim);
+            _menu.Run(CName + 10, row + 3, "B EXIT",  text);
 
-        // --- grid drawing -------------------------------------------------------
-
-        Rect CellRect(int col, int row, int wc, int hc) =>
-            new(_ox + col * _cw, _oy + row * _ch, wc * _cw, hc * _ch);
-
-        void Text(int col, int row, string s, Color c)
-        {
-            _label.normal.textColor = c;
-            for (int i = 0; i < s.Length; i++)
-                GUI.Label(CellRect(col + i, row, 1, 1), s[i].ToString(), _label);
-        }
-
-        void Glyph(int col, int row, string g, Color c)
-        {
-            _label.normal.textColor = c;
-            GUI.Label(CellRect(col, row, 1, 1), g, _label);
-        }
-
-        void EnsureStyle()
-        {
-            _label ??= new GUIStyle { alignment = TextAnchor.MiddleCenter };
-            _label.font = font;
-            _label.fontSize = Mathf.Max(6, Mathf.RoundToInt(_ch * 0.8f));
-
-            if (_tex == null)
-            {
-                _tex = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
-                _tex.SetPixel(0, 0, Color.white); _tex.Apply();
-            }
-        }
-
-        void Fill(Rect r, Color c)
-        {
-            var prev = GUI.color; GUI.color = c; GUI.DrawTexture(r, _tex); GUI.color = prev;
+            _menu.End();
         }
     }
 }
