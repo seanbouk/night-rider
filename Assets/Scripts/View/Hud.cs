@@ -96,6 +96,18 @@ namespace NightRider.View
             if (_paused) DrawPause();
         }
 
+        // 4:3 active-area screen rect (px), for shaders that dither at the 320px
+        // virtual width (the attack apparition).
+        void PublishScreenArea()
+        {
+            const float aspect = 4f / 3f;
+            float sw = Screen.width, sh = Screen.height, w, h;
+            if (sw / sh > aspect) { h = sh; w = h * aspect; }
+            else                  { w = sw; h = w / aspect; }
+            Shader.SetGlobalFloat("_HudAreaX", (sw - w) * 0.5f);
+            Shader.SetGlobalFloat("_HudAreaW", w);
+        }
+
         void DrawPause()
         {
             const string msg = "PAUSE";
@@ -200,6 +212,8 @@ namespace NightRider.View
 
         void Update()
         {
+            PublishScreenArea();
+
             // Start toggles pause (unless the trade menu, which has its own pause, is up).
             if (!TradingMenu.Active && Controls.Start)
             {

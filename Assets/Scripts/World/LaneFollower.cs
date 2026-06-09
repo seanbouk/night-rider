@@ -51,13 +51,16 @@ namespace NightRider.World
         public float collectDistance = 3f;
 
         [Header("Attack")]
-        [Min(0f), Tooltip("How far to the side an attack reaches (also the debug blade's length).")]
+        [Min(0f), Tooltip("How far to the side an attack reaches (target range + apparition throw).")]
         public float attackReach = 6f;
         [Range(0f, 1f), Tooltip("Energy removed per attack. 1 = one-shot kill.")]
         public float attackDamage = 1f;
-        [Min(0f), Tooltip("Seconds the debug attack visual shows.")]
-        public float attackVisualTime = 0.15f;
-        public Color attackVisualColor = new(1f, 0.35f, 0.1f, 1f);
+        [Tooltip("Rider sprite the apparition mirrors (synced frames).")]
+        public SpriteSheetAnimator riderSprite;
+        [Tooltip("Ghost material using the NightRider/Apparition shader.")]
+        public Material apparitionMaterial;
+        [Min(0.05f), Tooltip("Seconds the apparition lives (shoots out, then flashes).")]
+        public float apparitionLife = 0.4f;
 
         [Header("Lane switching")]
         [Min(0.01f), Tooltip("Seconds to slide across when hopping to a neighbour.")]
@@ -144,7 +147,7 @@ namespace NightRider.World
 
         void Attack(int side)
         {
-            SpawnAttackVisual(side);
+            SpawnApparition(side);
 
             if (network == null) return;
             if (!network.TryGetNeighbor(lane, t, side, out var nb) || nb == null) return;
@@ -166,18 +169,15 @@ namespace NightRider.World
             target.Collect();
         }
 
-        // Debug blade: wide (sideways), thin, shallow — a sword held horizontally.
-        void SpawnAttackVisual(int side)
+        // A ghost apparition of the rider shoots out to the attacked side.
+        void SpawnApparition(int side)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Destroy(go.GetComponent<Collider>());
-            go.transform.SetParent(transform, false);
+            if (apparitionMaterial == null || riderSprite == null) return;
 
-            float len = Mathf.Max(0.1f, attackReach);
-            go.transform.localScale = new Vector3(len, 0.4f, 1.2f);
-            go.transform.localPosition = new Vector3(side * len * 0.5f, 0f, 0f);
-            go.GetComponent<MeshRenderer>().material.color = attackVisualColor;
-            Destroy(go, attackVisualTime);
+            var go = new GameObject("Apparition");
+            go.AddComponent<SpriteRenderer>().sharedMaterial = apparitionMaterial;
+            go.AddComponent<Apparition>()
+              .Init(riderSprite, transform.position, transform.right * side, attackReach, apparitionLife, riderSprite.SortingOrder - 1);
         }
 
         void Advance(float dt)

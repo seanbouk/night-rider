@@ -33,6 +33,10 @@ namespace NightRider.View
         float _t;
         Camera _cam;
 
+        // Current frame, so an apparition can mirror the rider in sync.
+        public Sprite CurrentSprite => _sr != null ? _sr.sprite : null;
+        public int SortingOrder => _sr != null ? _sr.sortingOrder : 0;
+
         void Awake()
         {
             _sr = GetComponent<SpriteRenderer>();
