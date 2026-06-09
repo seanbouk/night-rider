@@ -42,7 +42,8 @@ namespace NightRider.World
         public int sheetCols = 3, sheetRows = 4;
         public float pixelsPerUnit = 100f;
         public Vector2 pivot = new(0.5f, 0.5f);
-        public float sameLaneThreshold = 3f;
+        [Tooltip("View-angle (degrees) past which a carriage shows its left/right view.")]
+        public float viewAngleThreshold = 18f;
 
         readonly List<Carriage> _spawned = new();
         float _timer;
@@ -141,8 +142,7 @@ namespace NightRider.World
                 cs.rows = sheetRows;
                 cs.pixelsPerUnit = pixelsPerUnit;
                 cs.pivot = pivot;
-                cs.sameLaneThreshold = sameLaneThreshold;
-                cs.rider = rider;
+                cs.viewAngleThreshold = viewAngleThreshold;
             }
             else
             {

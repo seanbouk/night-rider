@@ -17,15 +17,15 @@ namespace NightRider.View
         public float pixelsPerUnit = 100f;
         public Vector2 pivot = new(0.5f, 0.5f);
 
-        public LaneFollower rider;
-        [Tooltip("Lateral distance counted as 'same lane' (middle sprite).")]
-        public float sameLaneThreshold = 3f;
+        [Tooltip("View-angle (degrees) past which we show the left/right view instead of middle.")]
+        public float viewAngleThreshold = 18f;
         public bool unlit = true;
 
         SpriteRenderer _sr;
         Sprite[] _sprites;   // rows * cols
         int _row;
         Camera _cam;
+        Carriage _carriage;   // parent, for the wreck flash
 
         void Awake()
         {
@@ -58,21 +58,30 @@ namespace NightRider.View
                 if (sheet == null) return;
                 Slice();
                 _row = rows > 0 ? Random.Range(0, rows) : 0;
-                if (rider == null) rider = FindAnyObjectByType<LaneFollower>();
+                _carriage = GetComponentInParent<Carriage>();
             }
             if (_sprites.Length == 0) return;
 
-            int col = 1;   // same lane = middle
-            if (rider != null)
+            if (_cam == null) _cam = Camera.main;
+
+            // Column by the angle we're viewing it at (works on bends): the carriage
+            // turned LEFT of our view means we see its RIGHT, and vice versa.
+            int col = 1;   // aligned -> back/middle view
+            Vector3 view = _cam != null ? _cam.transform.forward : Vector3.forward;
+            Vector3 cf = transform.parent != null ? transform.parent.forward : transform.forward;
+            view.y = 0f; cf.y = 0f;
+            if (view.sqrMagnitude > 1e-4f && cf.sqrMagnitude > 1e-4f)
             {
-                float lateral = Vector3.Dot(transform.position - rider.transform.position, rider.transform.right);
-                if (lateral < -sameLaneThreshold) col = 0;        // left of the rider
-                else if (lateral > sameLaneThreshold) col = 2;    // right of the rider
+                float ang = Vector3.SignedAngle(view, cf, Vector3.up);
+                if (ang < -viewAngleThreshold) col = 2;
+                else if (ang > viewAngleThreshold) col = 0;
             }
             col = Mathf.Clamp(col, 0, cols - 1);
             _sr.sprite = _sprites[_row * cols + col];
 
-            if (_cam == null) _cam = Camera.main;
+            // Out of energy: flash (placeholder for a destroyed sprite).
+            _sr.enabled = _carriage == null || !_carriage.IsWreck || Mathf.Repeat(Time.time, 0.2f) < 0.1f;
+
             if (_cam != null) transform.rotation = _cam.transform.rotation;
         }
     }
