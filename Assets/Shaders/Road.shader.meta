@@ -2,7 +2,9 @@ fileFormatVersion: 2
 guid: 54174f67fd0acf84189ac0577979bd96
 ShaderImporter:
   externalObjects: {}
-  defaultTextures: []
+  defaultTextures:
+  - _TracksTex: {fileID: 2800000, guid: 1c46f6f22cee7854c9f201da6d8239eb, type: 3}
+  - _GrassTex: {fileID: 2800000, guid: ed2fee17034e6594f92e417d1bc8abff, type: 3}
   nonModifiableTextures: []
   userData: 
   assetBundleName: 

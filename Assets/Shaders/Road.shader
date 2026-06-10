@@ -1,40 +1,33 @@
-// Super-scaler road. Unlit (flat NES-ish look). Two greyscale layers tiled along
-// the road and composited: TRACKS on the bottom, GRASS on top. Each layer reads
-// its texture's brightness — pixels at/above a per-layer threshold show as that
-// layer's solid colour; darker pixels are TRANSPARENT (hard clip, no alpha blend,
-// so the layer below — or the background — shows through). Grass wins wherever
-// both layers are lit. Colours are plain material properties so gameplay can
-// recolour the world at runtime (material.SetColor("_GrassColor", ...)).
+// Super-scaler road. Unlit (flat NES look). Two GREYSCALE layered textures —
+// TRACKS (opaque base) with GRASS on top (its own alpha is the cutout; grass's
+// transparent texels reveal the tracks). Each layer is tinted by a MULTIPLY colour
+// (white in the texture becomes that colour, greys become darker shades of it),
+// then the visible pixel is snapped to the nearest NES palette colour. Tint +
+// snap are done in sRGB so the multiply reads intuitively and the snap is
+// colour-correct.
 //
-// The scroll is VIEW-RELATIVE so it always flows toward the camera, on every
-// lane, regardless of which way that lane actually runs — it's a speed cue for
-// the rider, not a traffic sim. Two globals drive it, set by RoadScroll.cs:
-//   _RoadScroll  (float)  - accumulated scroll, from rider speed x multiplier
-//   _RoadFlowDir (vector) - the camera's forward direction
-// Per fragment we flip the scroll sign by sign(dot(roadDir, camFwd)), so the
-// surface of an oncoming lane flows the same way on screen as your own.
+// The textures are wide (width = length), so U (width) runs ALONG the road and
+// V (height) runs ACROSS it.
+//
+// Scroll is VIEW-RELATIVE. Globals set by RoadScroll.cs:
+//   _RoadScroll  (float)  - accumulated scroll in world metres
+//   _RoadFlowDir (vector) - camera forward
 
 Shader "NightRider/Road"
 {
     Properties
     {
-        [Header(Tracks   bottom layer)]
-        _TracksTex   ("Tracks (greyscale)", 2D) = "black" {}
-        _TracksColor ("Tracks colour", Color) = (0.42, 0.27, 0.17, 1)   // brown
-        _TracksCut   ("Tracks white threshold", Range(0,1)) = 0.5
-        _TracksTiling("Tracks tiling (across, along per metre)", Vector) = (1, 0.1, 0, 0)
-
-        [Header(Grass   top layer)]
-        _GrassTex    ("Grass (greyscale)", 2D) = "black" {}
-        _GrassColor  ("Grass colour", Color) = (0.20, 0.55, 0.20, 1)     // green
-        _GrassCut    ("Grass white threshold", Range(0,1)) = 0.5
-        _GrassTiling ("Grass tiling (across, along per metre)", Vector) = (1, 0.1, 0, 0)
+        [NoScaleOffset] _TracksTex ("Tracks (bottom, greyscale)", 2D) = "white" {}
+        [NoScaleOffset] _GrassTex  ("Grass (top, greyscale + alpha)", 2D) = "black" {}
+        _TracksColor ("Tracks multiply (white = this)", Color) = (1, 1, 1, 1)
+        _GrassColor  ("Grass multiply (white = this)",  Color) = (1, 1, 1, 1)
+        _TracksTiling ("Tracks tiling (repeats/metre along, repeats across)", Vector) = (0.1, 1, 0, 0)
+        _GrassTiling  ("Grass tiling (repeats/metre along, repeats across)",  Vector) = (0.1, 1, 0, 0)
     }
 
     SubShader
     {
-        // Cutout: opaque where a layer is lit, clipped (see-through) where not.
-        Tags { "RenderType" = "TransparentCutout" "Queue" = "AlphaTest" "RenderPipeline" = "UniversalPipeline" }
+        Tags { "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
 
         Pass
         {
@@ -42,6 +35,7 @@ Shader "NightRider/Road"
             #pragma vertex vert
             #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
 
             struct Attributes
             {
@@ -57,21 +51,55 @@ Shader "NightRider/Road"
                 float3 tangentWS   : TEXCOORD1;
             };
 
-            TEXTURE2D(_TracksTex);  SAMPLER(sampler_TracksTex);
-            TEXTURE2D(_GrassTex);   SAMPLER(sampler_GrassTex);
+            TEXTURE2D(_TracksTex); SAMPLER(sampler_TracksTex);
+            TEXTURE2D(_GrassTex);  SAMPLER(sampler_GrassTex);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _TracksColor;
                 float4 _GrassColor;
                 float4 _TracksTiling;
                 float4 _GrassTiling;
-                float  _TracksCut;
-                float  _GrassCut;
             CBUFFER_END
 
-            // Set globally by RoadScroll.cs
             float  _RoadScroll;
             float3 _RoadFlowDir;
+
+            // NES 2C02 palette (0-255 sRGB).
+            static const float3 NES[64] =
+            {
+                float3(84,84,84),   float3(0,30,116),   float3(8,16,144),   float3(48,0,136),
+                float3(68,0,100),   float3(92,0,48),    float3(84,4,0),     float3(60,24,0),
+                float3(32,42,0),    float3(8,58,0),     float3(0,64,0),     float3(0,60,0),
+                float3(0,50,60),    float3(0,0,0),      float3(0,0,0),      float3(0,0,0),
+                float3(152,150,152),float3(8,76,196),   float3(48,50,236),  float3(92,30,228),
+                float3(136,20,176), float3(160,20,100), float3(152,34,32),  float3(120,60,0),
+                float3(84,90,0),    float3(40,114,0),   float3(8,124,0),    float3(0,118,40),
+                float3(0,102,120),  float3(0,0,0),      float3(0,0,0),      float3(0,0,0),
+                float3(236,238,236),float3(76,154,236), float3(120,124,236),float3(176,98,236),
+                float3(228,84,236), float3(236,88,180), float3(236,106,100),float3(212,136,32),
+                float3(160,170,0),  float3(116,196,0),  float3(76,208,32),  float3(56,204,108),
+                float3(56,180,204), float3(60,60,60),   float3(0,0,0),      float3(0,0,0),
+                float3(236,238,236),float3(168,204,236),float3(188,188,236),float3(212,178,236),
+                float3(236,174,236),float3(236,174,212),float3(236,180,176),float3(228,196,144),
+                float3(204,210,120),float3(180,222,120),float3(168,226,144),float3(152,226,180),
+                float3(160,214,228),float3(160,162,160),float3(0,0,0),      float3(0,0,0),
+            };
+
+            // Snap an sRGB colour to the nearest NES colour, returned linear.
+            half3 SnapNes(float3 srgb)
+            {
+                float3 best = NES[0] / 255.0;
+                float bestD = 1e9;
+                [unroll]
+                for (int i = 0; i < 64; i++)
+                {
+                    float3 p = NES[i] / 255.0;
+                    float3 d = srgb - p;
+                    float dist = dot(d, d);
+                    if (dist < bestD) { bestD = dist; best = p; }
+                }
+                return SRGBToLinear(best);
+            }
 
             Varyings vert (Attributes IN)
             {
@@ -82,33 +110,24 @@ Shader "NightRider/Road"
                 return OUT;
             }
 
-            // Greyscale brightness of a layer's texel.
-            float Grey(TEXTURE2D_PARAM(tex, smp), float2 uv)
-            {
-                half3 c = SAMPLE_TEXTURE2D(tex, smp, uv).rgb;
-                return dot(c, float3(0.299, 0.587, 0.114));
-            }
-
             half4 frag (Varyings IN) : SV_Target
             {
-                // Flow toward the camera regardless of lane direction.
-                // uv.y is world distance (metres); _RoadScroll is world metres.
-                float dir = sign(dot(normalize(IN.tangentWS), _RoadFlowDir));
+                float dir   = sign(dot(normalize(IN.tangentWS), _RoadFlowDir));
                 float along = IN.uv.y + _RoadScroll * dir;
 
-                float2 tUV = float2(IN.uv.x * _TracksTiling.x, along * _TracksTiling.y);
-                float2 gUV = float2(IN.uv.x * _GrassTiling.x,  along * _GrassTiling.y);
+                float2 tUV = float2(along * _TracksTiling.x, IN.uv.x * _TracksTiling.y);
+                float2 gUV = float2(along * _GrassTiling.x,  IN.uv.x * _GrassTiling.y);
 
-                // Brightness >= threshold => the layer is lit (opaque), else transparent.
-                float tracksOn = step(_TracksCut, Grey(TEXTURE2D_ARGS(_TracksTex, sampler_TracksTex), tUV));
-                float grassOn  = step(_GrassCut,  Grey(TEXTURE2D_ARGS(_GrassTex,  sampler_GrassTex),  gUV));
+                half4 grass  = SAMPLE_TEXTURE2D(_GrassTex,  sampler_GrassTex,  gUV);
+                half4 tracks = SAMPLE_TEXTURE2D(_TracksTex, sampler_TracksTex, tUV);
 
-                // Nothing lit -> hole (background shows through).
-                clip(max(tracksOn, grassOn) - 0.5);
+                // Tint greyscale by the multiply colour, in sRGB (white -> the colour).
+                float3 gTracks = LinearToSRGB(tracks.rgb) * LinearToSRGB(_TracksColor.rgb);
+                float3 gGrass  = LinearToSRGB(grass.rgb)  * LinearToSRGB(_GrassColor.rgb);
 
-                // Tracks underneath, grass painted on top.
-                half3 col = lerp(_TracksColor.rgb, _GrassColor.rgb, grassOn);
-                return half4(col, 1.0);
+                // Grass texel's own alpha is the cutout — opaque grass over tracks.
+                float3 chosen = grass.a >= 0.5 ? gGrass : gTracks;
+                return half4(SnapNes(saturate(chosen)), 1.0);
             }
             ENDHLSL
         }
