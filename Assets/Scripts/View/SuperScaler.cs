@@ -9,28 +9,36 @@ namespace NightRider.View
 {
     public static class SuperScaler
     {
-        // Sets t.localScale so the sprite's projected width is the next whole step of
-        // `stepPixels` mosaic pixels (mosaicHeight = the CRT's vertical resolution).
-        // Measured at scale 1 from the sprite bounds, so there's no feedback.
+        // Sets t.localScale uniformly so a sprite's projected width snaps up to whole
+        // `stepPixels` mosaic tiles. Measured at scale 1 from the sprite bounds.
         public static void SnapWidth(Transform t, Camera cam, Sprite sprite, float mosaicHeight, float stepPixels)
         {
-            if (cam == null || sprite == null) return;
+            if (sprite == null) return;
+            float f = StepFactor(t.position, cam, sprite.bounds.extents.x, mosaicHeight, stepPixels);
+            if (f > 0f) t.localScale = Vector3.one * f;
+        }
 
-            Vector3 pos = t.position;
-            float halfW = sprite.bounds.extents.x;          // world half-width at scale 1
+        // Uniform scale factor so something of half-width `worldHalfWidth` (at scale 1)
+        // snaps its on-screen width up to whole `stepPixels` mosaic tiles. Returns 0
+        // to skip (no camera / behind it / degenerate). Used by sprites and the tree
+        // billboards (which apply it to their own base size).
+        public static float StepFactor(Vector3 worldPos, Camera cam, float worldHalfWidth, float mosaicHeight, float stepPixels)
+        {
+            if (cam == null || worldHalfWidth <= 0f) return 0f;
+
             Vector3 r = cam.transform.right;
-            Vector3 a = cam.WorldToScreenPoint(pos - r * halfW);
-            Vector3 b = cam.WorldToScreenPoint(pos + r * halfW);
-            if (a.z <= 0f || b.z <= 0f) return;             // behind camera — leave last scale
+            Vector3 a = cam.WorldToScreenPoint(worldPos - r * worldHalfWidth);
+            Vector3 b = cam.WorldToScreenPoint(worldPos + r * worldHalfWidth);
+            if (a.z <= 0f || b.z <= 0f) return 0f;             // behind camera
 
             float mh   = mosaicHeight > 1f ? mosaicHeight : 240f;
             float step = stepPixels  >= 1f ? stepPixels  : 8f;
 
             float widthMosaic = Mathf.Abs(b.x - a.x) * mh / Mathf.Max(Screen.height, 1);
-            if (widthMosaic < 1e-3f) return;
+            if (widthMosaic < 1e-3f) return 0f;
 
             float snapped = Mathf.Max(step, Mathf.Ceil(widthMosaic / step) * step);   // always round up
-            t.localScale = Vector3.one * (snapped / widthMosaic);
+            return snapped / widthMosaic;
         }
     }
 }
