@@ -6307,6 +6307,7 @@ MonoBehaviour:
   pivot: {x: 0.5, y: 0.4}
   billboard: 1
   unlit: 1
+  galloping: 1
   debugMesh: {fileID: 369762238}
   showDebugMesh: 0
 --- !u!212 &2074094194

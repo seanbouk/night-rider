@@ -23,6 +23,10 @@ namespace NightRider.View
         [Tooltip("Self-illuminated (unlit) — ignores scene lighting.")]
         public bool unlit = true;
 
+        [Header("Audio")]
+        [Tooltip("Play the gallop hoof SFX as this animation hits frames 0-3 (tick on the rider).")]
+        public bool galloping = false;
+
         [Header("Debug")]
         [Tooltip("Optional placeholder mesh to hide (e.g. the capsule).")]
         public Renderer debugMesh;
@@ -31,6 +35,7 @@ namespace NightRider.View
         SpriteRenderer _sr;
         Sprite[] _sprites;
         float _t;
+        int _lastFrame = -1;
         Camera _cam;
 
         // Current frame, so an apparition can mirror the rider in sync.
@@ -66,7 +71,14 @@ namespace NightRider.View
             {
                 _t += Time.deltaTime * fps;
                 if (_t >= _sprites.Length) _t %= _sprites.Length;
-                _sr.sprite = _sprites[(int)_t];
+                int frame = (int)_t;
+                _sr.sprite = _sprites[frame];
+
+                if (frame != _lastFrame)
+                {
+                    _lastFrame = frame;
+                    if (galloping && frame <= 3) Sfx.Play(SfxId.Gallop);   // hoofbeat per gallop frame
+                }
             }
 
             if (billboard)

@@ -50,6 +50,7 @@ namespace NightRider.View
             IsOpen = true;
             Active = true;
             Time.timeScale = 0f;
+            Sfx.Play(SfxId.OpenShop);
         }
 
         public void Close()
@@ -58,6 +59,7 @@ namespace NightRider.View
             Active = false;
             ClosedFrame = Time.frameCount;
             Time.timeScale = 1f;
+            Sfx.Play(SfxId.CloseShop);
         }
 
         void Update()
@@ -66,15 +68,16 @@ namespace NightRider.View
             int n = player.items.Count;
             if (n == 0) return;
 
-            if (Controls.Up)   _sel = (_sel - 1 + n) % n;
-            if (Controls.Down) _sel = (_sel + 1) % n;
-            if (Controls.Left)  Adjust(-1);
-            if (Controls.Right) Adjust(+1);
-            if (Controls.A) TryCommit();   // A / > = trade
-            if (Controls.B) Close();        // B / < = exit
+            if (Controls.Up)   { _sel = (_sel - 1 + n) % n; Sfx.Play(SfxId.NavShop); }
+            if (Controls.Down) { _sel = (_sel + 1) % n;     Sfx.Play(SfxId.NavShop); }
+            if (Controls.Left)  Sfx.Play(Adjust(-1) ? SfxId.ShopDown : SfxId.NavShop);   // sell -, sweeps down
+            if (Controls.Right) Sfx.Play(Adjust(+1) ? SfxId.ShopUp   : SfxId.NavShop);   // buy +, sweeps up
+            if (Controls.A) Sfx.Play(TryCommit() ? SfxId.Purchase : SfxId.NavShop);      // A / > = trade
+            if (Controls.B) Close();        // B / < = exit (plays CloseShop)
         }
 
-        void Adjust(int dir)
+        // Returns true if the quantity actually changed (false if clamped/blocked).
+        bool Adjust(int dir)
         {
             var it = player.items[_sel];
             int prev = _delta[_sel];
@@ -90,6 +93,7 @@ namespace NightRider.View
             // so reverting to it is always safe.
             _delta[_sel] = d;
             if (player.gold + GoldChange() < 0) _delta[_sel] = prev;
+            return _delta[_sel] != prev;
         }
 
         int GoldChange()
@@ -110,13 +114,15 @@ namespace NightRider.View
             return false;
         }
 
-        void TryCommit()
+        // Returns true if a trade was actually committed.
+        bool TryCommit()
         {
             int change = GoldChange();
-            if (!AnyDelta() || player.gold + change < 0) return;
+            if (!AnyDelta() || player.gold + change < 0) return false;
             player.gold += change;
             for (int i = 0; i < player.items.Count; i++) player.Add(player.items[i].type, _delta[i]);
             System.Array.Clear(_delta, 0, _delta.Length);
+            return true;
         }
 
         // ----------------------------------------------------------- drawing

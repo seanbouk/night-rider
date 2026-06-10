@@ -138,6 +138,8 @@ namespace NightRider.World
             _slideRot = prevRot;
             _slideTime = 0f;
             _sliding = true;
+
+            Sfx.Play(SfxId.ChangeLane);
         }
 
         // < attacks the lane to the left, > the lane to the right.
@@ -149,6 +151,7 @@ namespace NightRider.World
 
         void Attack(int side)
         {
+            Sfx.Play(SfxId.Attack);
             SpawnApparition(side);
 
             if (network == null) return;

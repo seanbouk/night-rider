@@ -58,11 +58,12 @@ namespace NightRider.World
         {
             if (_destroyed) return;
             energy -= fraction;
-            if (energy > 0f) return;
+            if (energy > 0f) { Sfx.Play(SfxId.Hit); return; }
 
             energy = 0f;
             _destroyed = true;
             idealSpeed = 0f;
+            Sfx.Play(SfxId.Kill);
             if (_renderer != null)
             {
                 Color c = _renderer.material.color;
