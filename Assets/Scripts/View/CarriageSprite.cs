@@ -143,34 +143,7 @@ namespace NightRider.View
             _sr.enabled = _carriage == null || !_carriage.IsWreck || Mathf.Repeat(Time.time, 0.2f) < 0.1f;
 
             if (_cam != null) transform.rotation = _cam.transform.rotation;
-            SnapSize();
-        }
-
-        // Super-scaler trick: the NES couldn't scale a sprite, so games stored a few
-        // pre-sized copies and the sprite "popped" between them. We fake that by
-        // snapping the on-screen WIDTH up to whole 8-mosaic-pixel tiles each frame
-        // (position still glides smoothly). Measured at localScale 1 from the sprite
-        // bounds, so there's no feedback.
-        void SnapSize()
-        {
-            if (_cam == null || _sr.sprite == null) return;
-
-            Vector3 pos = transform.position;
-            float halfW = _sr.sprite.bounds.extents.x;             // world half-width at scale 1
-            Vector3 r = _cam.transform.right;
-            Vector3 a = _cam.WorldToScreenPoint(pos - r * halfW);
-            Vector3 b = _cam.WorldToScreenPoint(pos + r * halfW);
-            if (a.z <= 0f || b.z <= 0f) return;                    // behind camera — leave last scale
-
-            float mh   = mosaicHeight   > 1f ? mosaicHeight   : 240f;
-            float step = sizeStepPixels >= 1f ? sizeStepPixels : 8f;
-
-            float widthMosaic = Mathf.Abs(b.x - a.x) * mh / Mathf.Max(Screen.height, 1);
-            if (widthMosaic < 1e-3f) return;
-
-            float snapped = Mathf.Max(step, Mathf.Ceil(widthMosaic / step) * step);   // always round up
-            float factor  = snapped / widthMosaic;
-            transform.localScale = new Vector3(factor, factor, factor);
+            SuperScaler.SnapWidth(transform, _cam, _sr.sprite, mosaicHeight, sizeStepPixels);
         }
     }
 }

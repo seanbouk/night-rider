@@ -15,6 +15,15 @@ namespace NightRider.View
         public float pixelsPerUnit = 100f;
         public Vector2 pivot = new(0.5f, 0.5f);
 
+        [Tooltip("Snap the sheet's colours to the NES palette at load (needs Read/Write on the texture).")]
+        public bool snapToNes = true;
+
+        [Header("Super-scaler stepped scaling")]
+        [Tooltip("Snap on-screen width up to whole steps of this many mosaic pixels (8 = one NES tile).")]
+        public float sizeStepPixels = 8f;
+        [Tooltip("Mosaic vertical resolution — match the CRT's Pixel Height (240).")]
+        public float mosaicHeight = 240f;
+
         SpriteRenderer _sr;
         Sprite _before, _after;
         PlayerState _player;
@@ -28,6 +37,7 @@ namespace NightRider.View
             if (_before == null)
             {
                 if (sheet == null) return;
+                if (snapToNes) sheet = Nes.SnapTexture(sheet);
                 float w = sheet.width / 2f, h = sheet.height;
                 _after  = Sprite.Create(sheet, new Rect(0f, 0f, w, h), pivot, pixelsPerUnit);   // left = after
                 _before = Sprite.Create(sheet, new Rect(w,  0f, w, h), pivot, pixelsPerUnit);   // right = before
@@ -38,6 +48,7 @@ namespace NightRider.View
 
             if (_cam == null) _cam = Camera.main;
             if (_cam != null) transform.rotation = _cam.transform.rotation;
+            SuperScaler.SnapWidth(transform, _cam, _sr.sprite, mosaicHeight, sizeStepPixels);
         }
 
         bool HasHead()

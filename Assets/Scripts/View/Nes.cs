@@ -4,6 +4,7 @@
 // keeps the art honest to the hardware. Snap once in code (cheap) rather than
 // per-pixel in a shader.
 
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NightRider.View
@@ -74,6 +75,44 @@ namespace NightRider.View
             Color o = Palette[best];
             o.a = 1f;
             return o;
+        }
+
+        // Return a copy of `src` with every pixel snapped to its nearest NES colour
+        // (cached per unique colour, original alpha preserved so transparency/edges
+        // are untouched). Keeps all colours — no palette reduction. Needs Read/Write
+        // on the source; returns it unchanged (with a warning) if not readable.
+        public static Texture2D SnapTexture(Texture2D src)
+        {
+            if (src == null) return src;
+            if (!src.isReadable)
+            {
+                Debug.LogWarning($"Nes.SnapTexture: enable Read/Write on '{src.name}' to NES-snap it; using it un-snapped.");
+                return src;
+            }
+
+            var px = src.GetPixels32();
+            var cache = new Dictionary<Color32, Color32>();
+            for (int i = 0; i < px.Length; i++)
+            {
+                Color32 c = px[i];
+                if (!cache.TryGetValue(c, out var snapped))
+                {
+                    snapped = (Color32)Snap(new Color(c.r / 255f, c.g / 255f, c.b / 255f));
+                    snapped.a = c.a;                       // keep original transparency
+                    cache[c] = snapped;
+                }
+                px[i] = snapped;
+            }
+
+            var tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false)
+            {
+                name = src.name + "_NES",
+                filterMode = FilterMode.Point,
+                wrapMode = src.wrapMode,
+            };
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
         }
     }
 }
