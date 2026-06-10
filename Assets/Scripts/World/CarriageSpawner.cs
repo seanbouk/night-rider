@@ -30,7 +30,7 @@ namespace NightRider.World
         public float spawnInterval = 0.4f;
         [Min(0f), Tooltip("Don't spawn within this distance of existing traffic.")]
         public float occupyClearance = 6f;
-        [Min(0f), Tooltip("Keep the run-up to a trading post clear: never spawn between the rider and a post that's within this distance ahead on the lane. 0 = off.")]
+        [Min(0f), Tooltip("Keep trading-post approaches clear: while a post is within this distance ahead on a lane, spawn NOTHING on that lane (whole lane, not just the gap) until the rider passes it. 0 = off.")]
         public float postApproachClear = 100f;
 
         [Header("Carriage")]
@@ -141,24 +141,25 @@ namespace NightRider.World
             else if (t > 1f) return;
 
             if (Carriage.Occupied(lane, t, occupyClearance)) return;
-            if (BlockedByPost(lane, baseT, t)) return;   // keep the run-up to a post clear
+            if (PostAhead(lane, baseT)) return;   // a post is coming up on this lane — keep it empty
 
             Spawn(lane, t);
         }
 
-        // True if the spawn point lands between the rider and a trading post that's
-        // within postApproachClear ahead on the same lane (so we never clutter the
-        // approach to a post the rider is heading for).
-        bool BlockedByPost(Lane lane, float baseT, float spawnT)
+        // True if a trading post is coming up on this lane: within postApproachClear
+        // ahead of the rider and not yet passed. While so, we spawn NOTHING on the
+        // lane (the whole lane, not just the gap before the post), so the approach
+        // stays clutter-free; once the rider passes the post it wraps behind and
+        // spawning resumes.
+        bool PostAhead(Lane lane, float baseT)
         {
             if (postApproachClear <= 0f) return false;
             float len = lane.Length;
-            float spawnDist = Forward(baseT, spawnT, lane.Closed) * len;
             foreach (var post in TradingPost.All)
             {
                 if (post == null || post.lane != lane) continue;
                 float postDist = Forward(baseT, post.t, lane.Closed) * len;
-                if (postDist > spawnDist && postDist <= postApproachClear) return true;
+                if (postDist > 0f && postDist <= postApproachClear) return true;
             }
             return false;
         }
