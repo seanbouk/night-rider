@@ -658,7 +658,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8778045fc40212e469efed19919b4ca4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NightRider.View.SkyBackground
-  skyShader: {fileID: 0}
+  skyShader: {fileID: 4800000, guid: 02d21b900155e9043a634418d05fe750, type: 3}
   skyColor: {r: 0.854902, g: 0.4392157, b: 0.8392158, a: 1}
   horizon: 0.67
   rows: 40

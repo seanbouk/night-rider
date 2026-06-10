@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>{{{ PRODUCT_NAME }}}</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
+      body { display: flex; align-items: center; justify-content: center; }
+      /* Fixed 960 x 720 (4:3), black. */
+      #unity-canvas { width: 960px; height: 720px; background: #000; display: block; }
+      #unity-loading {
+        position: absolute; color: #cfcfcf; font: 14px/1 monospace; letter-spacing: 2px;
+        text-transform: uppercase;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="unity-canvas" width="960" height="720" tabindex="-1"></canvas>
+    <div id="unity-loading">loading&hellip;</div>
+
+    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+    <script>
+      var loading = document.querySelector("#unity-loading");
+      createUnityInstance(document.querySelector("#unity-canvas"), {
+        dataUrl: "Build/{{{ DATA_FILENAME }}}",
+        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+        memoryUrl: "Build/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+      }, function (progress) {
+        loading.textContent = "loading " + Math.round(progress * 100) + "%";
+      }).then(function () {
+        loading.style.display = "none";
+      }).catch(function (e) {
+        loading.textContent = "failed to load — see console";
+        console.error(e);
+      });
+    </script>
+  </body>
+</html>
