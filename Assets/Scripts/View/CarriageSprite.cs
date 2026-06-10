@@ -124,7 +124,10 @@ namespace NightRider.View
             // Column by the angle we're viewing it at (works on bends): the carriage
             // turned LEFT of our view means we see its RIGHT, and vice versa.
             int col = 1;   // aligned -> back/middle view
-            Vector3 view = _cam != null ? _cam.transform.forward : Vector3.forward;
+            // Line of sight TO this carriage (not the camera's forward): a same-
+            // heading carriage a lane over is still viewed at an angle, so we see
+            // its side. Captures both lateral offset and road bend.
+            Vector3 view = _cam != null ? transform.position - _cam.transform.position : Vector3.forward;
             Vector3 cf = transform.parent != null ? transform.parent.forward : transform.forward;
             view.y = 0f; cf.y = 0f;
             if (view.sqrMagnitude > 1e-4f && cf.sqrMagnitude > 1e-4f)
