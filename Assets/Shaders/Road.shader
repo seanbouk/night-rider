@@ -23,6 +23,7 @@ Shader "NightRider/Road"
         _GrassColor  ("Grass multiply (white = this)",  Color) = (1, 1, 1, 1)
         _TracksTiling ("Tracks tiling (repeats/metre along, repeats across)", Vector) = (0.1, 1, 0, 0)
         _GrassTiling  ("Grass tiling (repeats/metre along, repeats across)",  Vector) = (0.1, 1, 0, 0)
+        _MaxDistance  ("Max render distance from camera (0 = off)", Float) = 0
     }
 
     SubShader
@@ -49,6 +50,7 @@ Shader "NightRider/Road"
                 float4 positionHCS : SV_POSITION;
                 float2 uv          : TEXCOORD0;
                 float3 tangentWS   : TEXCOORD1;
+                float3 positionWS  : TEXCOORD2;
             };
 
             TEXTURE2D(_TracksTex); SAMPLER(sampler_TracksTex);
@@ -59,6 +61,7 @@ Shader "NightRider/Road"
                 float4 _GrassColor;
                 float4 _TracksTiling;
                 float4 _GrassTiling;
+                float  _MaxDistance;
             CBUFFER_END
 
             float  _RoadScroll;
@@ -107,11 +110,17 @@ Shader "NightRider/Road"
                 OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
                 OUT.uv          = IN.uv;
                 OUT.tangentWS   = TransformObjectToWorldDir(IN.tangentOS.xyz);
+                OUT.positionWS  = TransformObjectToWorld(IN.positionOS.xyz);
                 return OUT;
             }
 
             half4 frag (Varyings IN) : SV_Target
             {
+                // Hard far edge: drop road past _MaxDistance from the camera, so the
+                // sky shows beyond it (dial it to the sky's horizon).
+                if (_MaxDistance > 0.0 && distance(IN.positionWS, _WorldSpaceCameraPos) > _MaxDistance)
+                    clip(-1);
+
                 float dir   = sign(dot(normalize(IN.tangentWS), _RoadFlowDir));
                 float along = IN.uv.y + _RoadScroll * dir;
 
