@@ -28,6 +28,8 @@ namespace NightRider.View
         public Color headFill = new(1f, 1f, 1f, 0.06f);
         [Tooltip("Placeholder square for the gold counter.")]
         public Color goldColor = new(1f, 0.84f, 0f);
+        [Tooltip("Solid background behind the bottom HUD rows.")]
+        public Color hudStripColor = Color.black;
 
         [Header("Pickup FX")]
         [Min(0.05f)] public float pickupDuration = 1.2f;
@@ -111,10 +113,13 @@ namespace NightRider.View
         void DrawContent(UiCanvas ui)
         {
             _hud.Begin();
+
+            int cols = ui.cols, rows = ui.rows;
+            int top = rows - overscanRows - hudRows;
+            _hud.Fill(0, top, cols, hudRows + overscanRows, hudStripColor);   // solid black behind the bottom HUD rows
+
             if (player != null)
             {
-                int cols = ui.cols, rows = ui.rows;
-                int top = rows - overscanRows - hudRows;
                 const int boxW = 4, boxH = 4;
                 int boxCol = (cols - boxW) / 2;            // always horizontally centred
 
