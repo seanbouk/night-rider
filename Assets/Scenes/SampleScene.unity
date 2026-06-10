@@ -3384,7 +3384,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NightRider.View.TradingMenu
   player: {fileID: 1415112762}
-  font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+  font: {fileID: 12800000, guid: d091cab01dface5e1b0117ad09cab012, type: 3}
   cols: 40
   rows: 30
   background: {r: 0.06, g: 0.05, b: 0.1, a: 1}
@@ -4453,7 +4453,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NightRider.View.Hud
   player: {fileID: 0}
-  hudFont: {fileID: 0}
+  hudFont: {fileID: 12800000, guid: d091cab01dface5e1b0117ad09cab012, type: 3}
   hudText: {r: 1, g: 1, b: 1, a: 1}
   headFill: {r: 1, g: 1, b: 1, a: 0.06}
   headBorder: {r: 1, g: 1, b: 1, a: 0.5}

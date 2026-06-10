@@ -40,3 +40,7 @@ Still ahead: the **head-recovery progression** that ties it into a game (and hea
 2. Open the project in Unity (matching the version in `ProjectSettings/ProjectVersion.txt`).
 3. Unity will regenerate the `Library/` folder on first open.
 4. Open `Assets/Scenes/SampleScene.unity` to start.
+
+## Credits
+
+- **Dogica Pixel** font by Roberto Mocci — [SIL Open Font License 1.1](Assets/Art/Fonts/dogica_OFL_license.txt).

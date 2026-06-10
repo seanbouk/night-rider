@@ -1,0 +1,25 @@
+fileFormatVersion: 2
+guid: d091cab01dface5e1b0117ad09cab012
+TrueTypeFontImporter:
+  externalObjects: {}
+  serializedVersion: 4
+  fontSize: 16
+  forceTextureCase: -2
+  characterSpacing: 0
+  characterPadding: 1
+  includeFontData: 1
+  fontNames:
+  - Dogica Pixel
+  fallbackFontReferences: []
+  customCharacters:
+  fontRenderingMode: 2
+  ascentCalculationMode: 1
+  useLegacyBoundsCalculation: 0
+  shouldRoundAdvanceValue: 1
+  fontMapTextureFormat: 0
+  fontMapPropertyName:
+  fontMapMaxResolution: 0
+  shouldDeriveFontFromAscent: 0
+  userData:
+  assetBundleName:
+  assetBundleVariant:
