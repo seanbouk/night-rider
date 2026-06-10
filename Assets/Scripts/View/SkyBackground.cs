@@ -20,6 +20,8 @@ namespace NightRider.View
 
         [Tooltip("Sky colour at the horizon (fades to black toward the top). Snapped to NES.")]
         public Color skyColor = new(0.16f, 0.20f, 0.42f);   // dusky blue
+        [Tooltip("Flat colour for everything below the horizon (the ground). Snapped to NES.")]
+        public Color groundColor = Color.black;
         [Range(0f, 1f), Tooltip("Horizon height as a fraction up the screen; the sky gradient fills from here to the top.")]
         public float horizon = 0.5f;
         [Min(2), Tooltip("Gradient rows = NES scanlines (match the CRT's Pixel Height, 240).")]
@@ -32,6 +34,7 @@ namespace NightRider.View
         Material _mat;
         Texture2D _grad;
         Color _lastSky;
+        Color _lastGround;
         float _lastHorizon;
         int _lastRows = -1;
 
@@ -77,7 +80,7 @@ namespace NightRider.View
             _quad.localRotation = Quaternion.identity;
             _quad.localScale = new Vector3(h * _cam.aspect, h, 1f);
 
-            if (skyColor != _lastSky || !Mathf.Approximately(horizon, _lastHorizon) || rows != _lastRows)
+            if (skyColor != _lastSky || groundColor != _lastGround || !Mathf.Approximately(horizon, _lastHorizon) || rows != _lastRows)
                 Rebuild();
         }
 
@@ -101,7 +104,7 @@ namespace NightRider.View
             for (int y = 0; y < n; y++)
             {
                 float v = (y + 0.5f) / n;                       // 0 bottom .. 1 top
-                Color c = Color.black;
+                Color c = groundColor;                          // below the horizon
                 if (v >= horizon)
                 {
                     float t = (v - horizon) / Mathf.Max(1e-4f, 1f - horizon);   // 0 at horizon .. 1 at top
@@ -114,6 +117,7 @@ namespace NightRider.View
             _mat.SetTexture("_Gradient", _grad);
 
             _lastSky = skyColor;
+            _lastGround = groundColor;
             _lastHorizon = horizon;
             _lastRows = rows;
         }
