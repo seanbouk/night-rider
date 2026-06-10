@@ -3,6 +3,7 @@
 // super-scaler look and renders unlit (self-illuminated). Can hide a placeholder
 // mesh (the capsule) with a debug toggle to bring it back.
 
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace NightRider.View
@@ -22,6 +23,9 @@ namespace NightRider.View
         public bool billboard = true;
         [Tooltip("Self-illuminated (unlit) — ignores scene lighting.")]
         public bool unlit = true;
+        [Tooltip("Snap every sheet pixel to the nearest NES palette colour at load " +
+                 "(keeps all colours; needs Read/Write on the texture).")]
+        public bool snapToNes = false;
 
         [Header("Audio")]
         [Tooltip("Play the gallop hoof SFX as this animation hits frames 0-3 (tick on the rider).")]
@@ -51,7 +55,45 @@ namespace NightRider.View
                 var sh = Shader.Find("Sprites/Default");   // built-in, unlit
                 if (sh != null) _sr.sharedMaterial = new Material(sh);
             }
+            if (snapToNes) sheet = NesSnapped(sheet);
             Slice();
+        }
+
+        // Snap every pixel to its nearest NES colour (per unique colour, cached),
+        // keeping the original alpha so transparency/edges are untouched. Returns a
+        // new texture; the source asset is left alone.
+        static Texture2D NesSnapped(Texture2D src)
+        {
+            if (src == null) return src;
+            if (!src.isReadable)
+            {
+                Debug.LogWarning($"SpriteSheetAnimator: enable Read/Write on '{src.name}' to NES-snap it; using it un-snapped.");
+                return src;
+            }
+
+            var px = src.GetPixels32();
+            var cache = new Dictionary<Color32, Color32>();
+            for (int i = 0; i < px.Length; i++)
+            {
+                Color32 c = px[i];
+                if (!cache.TryGetValue(c, out var snapped))
+                {
+                    snapped = (Color32)Nes.Snap(new Color(c.r / 255f, c.g / 255f, c.b / 255f));
+                    snapped.a = c.a;                       // keep original transparency
+                    cache[c] = snapped;
+                }
+                px[i] = snapped;
+            }
+
+            var tex = new Texture2D(src.width, src.height, TextureFormat.RGBA32, false)
+            {
+                name = src.name + "_NES",
+                filterMode = FilterMode.Point,
+                wrapMode = src.wrapMode,
+            };
+            tex.SetPixels32(px);
+            tex.Apply();
+            return tex;
         }
 
         void Slice()
