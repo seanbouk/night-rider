@@ -1,7 +1,7 @@
-// Trading-post ghost from a 2x1 sheet: right sprite before you own a head, left
-// sprite after. Always billboards to the camera (it's a ghost, so it faces you
-// even on lanes running the other way). The see-through (every-other-screen-
-// column) comes from the material (NightRider/Apparition with monotone off).
+// Trading-post sprite from a 2x1 sheet: right sprite before you own a head, left
+// sprite after. Always billboards to the camera (it faces you even on lanes
+// running the other way). Solid (unlit) — three colours + transparent — with its
+// colours snapped to the NES palette.
 
 using UnityEngine;
 using NightRider.World;
@@ -15,6 +15,8 @@ namespace NightRider.View
         public float pixelsPerUnit = 100f;
         public Vector2 pivot = new(0.5f, 0.5f);
 
+        [Tooltip("Self-illuminated (unlit) solid sprite — replaces any assigned material.")]
+        public bool unlit = true;
         [Tooltip("Snap the sheet's colours to the NES palette at load (needs Read/Write on the texture).")]
         public bool snapToNes = true;
 
@@ -38,6 +40,11 @@ namespace NightRider.View
             {
                 if (sheet == null) return;
                 if (snapToNes) sheet = Nes.SnapTexture(sheet);
+                if (unlit)
+                {
+                    var sh = Shader.Find("Sprites/Default");   // built-in, unlit, solid (no dither)
+                    if (sh != null) _sr.sharedMaterial = new Material(sh);
+                }
                 float w = sheet.width / 2f, h = sheet.height;
                 _after  = Sprite.Create(sheet, new Rect(0f, 0f, w, h), pivot, pixelsPerUnit);   // left = after
                 _before = Sprite.Create(sheet, new Rect(w,  0f, w, h), pivot, pixelsPerUnit);   // right = before
