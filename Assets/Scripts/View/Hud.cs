@@ -26,6 +26,8 @@ namespace NightRider.View
         [Header("Content colours")]
         public Color hudText  = Color.white;
         public Color headFill = new(1f, 1f, 1f, 0.06f);
+        [Tooltip("Placeholder square for the gold counter.")]
+        public Color goldColor = new(1f, 0.84f, 0f);
 
         [Header("Pickup FX")]
         [Min(0.05f)] public float pickupDuration = 1.2f;
@@ -35,6 +37,8 @@ namespace NightRider.View
         public float pickupRiseCells = 2f;
         [Tooltip("Blink half-period (seconds).")]
         public float pickupBlink = 0.12f;
+        [Tooltip("Pickup token size, in grid cells. (Colour comes from the item.)")]
+        public float pickupSizeCells = 1.5f;
 
         [Header("Layout")]
         [Tooltip("Overscan-unsafe rows at the very bottom (content sits above them).")]
@@ -46,7 +50,7 @@ namespace NightRider.View
         public Color pauseBack = Color.black;
 
         GlyphGrid _hud, _pause;
-        readonly List<Text> _pickViews = new();
+        readonly List<Image> _pickViews = new();
         bool _paused;
 
         // ----------------------------------------------------------- sim / input
@@ -119,8 +123,8 @@ namespace NightRider.View
                 int colB = boxCol - 7;
                 int itemRow = top + 1;
                 var items = player.items;
-                for (int i = 0; i < 3 && i < items.Count; i++)     DrawCompact(colA, itemRow + i, items[i].emoji, items[i].count);
-                for (int i = 0; i < 3 && i + 3 < items.Count; i++) DrawCompact(colB, itemRow + i, items[i + 3].emoji, items[i + 3].count);
+                for (int i = 0; i < 3 && i < items.Count; i++)     DrawCompact(colA, itemRow + i, ItemColors.Of(items[i].type), items[i].count);
+                for (int i = 0; i < 3 && i + 3 < items.Count; i++) DrawCompact(colB, itemRow + i, ItemColors.Of(items[i + 3].type), items[i + 3].count);
 
                 // Head box, 4x4, horizontally centred (faint reserved slot).
                 _hud.Fill(boxCol, top, boxW, boxH, headFill);
@@ -128,15 +132,16 @@ namespace NightRider.View
                 // Right of the box: level then gold (item-style), dropped down.
                 int rightCol = boxCol + boxW + 1;
                 _hud.Run(rightCol, top + 1, player.level, hudText);
-                DrawCompact(rightCol, top + 3, "💰", player.gold);
+                DrawCompact(rightCol, top + 3, goldColor, player.gold);
             }
             _hud.End();
         }
 
-        // emoji  ×  ### (zero-padded to three digits, clamped 0-999) — 5 cells.
-        void DrawCompact(int col, int row, string emoji, int count)
+        // [icon]  ×  ### (zero-padded to three digits, clamped 0-999) — 5 cells.
+        // Icon is a placeholder full-cell colour square until real 8x8 sprites land.
+        void DrawCompact(int col, int row, Color icon, int count)
         {
-            _hud.Glyph(col, row, emoji, hudText);
+            _hud.Fill(col, row, 1, 1, icon);
             _hud.Glyph(col + 1, row, "×", hudText);
             _hud.Run(col + 2, row, Mathf.Clamp(count, 0, 999).ToString("D3"), hudText);
         }
@@ -157,10 +162,10 @@ namespace NightRider.View
 
         // ----------------------------------------------------------- pickups
 
-        class Pickup { public string glyph; public ItemType type; public Vector2 screen; public float elapsed; }
+        class Pickup { public ItemType type; public Vector2 screen; public float elapsed; }
         readonly List<Pickup> _pickups = new();
 
-        // HUD-space pickup at a world point: it appears there, rises, blinks, then
+        // HUD-space pickup at a world point: a gem appears there, rises, blinks, then
         // vanishes and credits the item. (Public API unchanged.)
         public void SpawnPickup(Vector3 worldPos, ItemType type)
         {
@@ -171,25 +176,25 @@ namespace NightRider.View
             Vector3 sp = cam.WorldToScreenPoint(worldPos);
             if (sp.z <= 0f) return;
 
-            string glyph = type.ToString();
-            if (player != null)
-                foreach (var it in player.items) if (it.type == type) { glyph = it.emoji; break; }
-
-            _pickups.Add(new Pickup { glyph = glyph, type = type, screen = new Vector2(sp.x, sp.y) });
+            _pickups.Add(new Pickup { type = type, screen = new Vector2(sp.x, sp.y) });
         }
 
         void DrawPickups(UiCanvas ui)
         {
             int n = _pickups.Count;
-            while (_pickViews.Count < n) _pickViews.Add(UiCanvas.MakeText(ui.PickupPanel, hudFont));
+            while (_pickViews.Count < n)
+            {
+                var img = UiCanvas.MakeImage(ui.PickupPanel, Color.white);
+                img.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);   // diamond/gem
+                _pickViews.Add(img);
+            }
 
             float cw = ui.CellWidth(ui.Frame), ch = ui.CellHeight(ui.Frame);
-            int fontSize = Mathf.Max(6, Mathf.RoundToInt(ch * 0.8f));
 
             for (int i = 0; i < _pickViews.Count; i++)
             {
                 var v = _pickViews[i];
-                if (i >= n) { v.gameObject.SetActive(false); continue; }
+                if (i >= n) { v.enabled = false; continue; }
 
                 var p = _pickups[i];
                 // Phase 1: rise (solid). Phase 2: hold at top and blink.
@@ -198,15 +203,13 @@ namespace NightRider.View
                 bool visible = p.elapsed < pickupRiseDuration
                     || Mathf.Repeat(p.elapsed - pickupRiseDuration, pickupBlink * 2f) < pickupBlink;
 
-                v.gameObject.SetActive(visible);
+                v.enabled = visible;
                 if (!visible) continue;
-                if (!ui.ScreenToFrame(ui.Frame, new Vector3(p.screen.x, p.screen.y, 0f), out var local)) continue;
 
+                ui.ScreenToFrame(ui.Frame, new Vector3(p.screen.x, p.screen.y, 0f), out var local);
                 v.rectTransform.anchoredPosition = new Vector2(local.x, local.y + rise);
-                v.rectTransform.sizeDelta = new Vector2(cw, ch);
-                v.text = p.glyph;
-                v.color = hudText;
-                v.fontSize = fontSize;
+                v.rectTransform.sizeDelta = new Vector2(pickupSizeCells * cw, pickupSizeCells * ch);
+                v.color = ItemColors.Of(p.type);
             }
         }
     }

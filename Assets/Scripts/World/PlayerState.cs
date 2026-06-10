@@ -10,6 +10,21 @@ namespace NightRider.World
 {
     public enum ItemType { Lupins, Tonics, Arms, Writs, Relics, Heads }
 
+    // Placeholder flat-colour icons until real three-colour 8x8 sprites land.
+    public static class ItemColors
+    {
+        public static Color Of(ItemType t) => t switch
+        {
+            ItemType.Lupins => new Color(1f,    0f,    1f),    // magenta
+            ItemType.Tonics => new Color(0.25f, 0.9f,  0.4f),  // green
+            ItemType.Arms   => new Color(0.9f,  0.2f,  0.2f),  // red
+            ItemType.Writs  => new Color(0.95f, 0.85f, 0.35f), // parchment
+            ItemType.Relics => new Color(0.3f,  0.8f,  0.95f), // cyan
+            ItemType.Heads  => new Color(0.95f, 0.95f, 0.95f), // bone
+            _               => Color.white,
+        };
+    }
+
     [Serializable]
     public class ItemStack
     {

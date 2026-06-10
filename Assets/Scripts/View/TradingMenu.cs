@@ -158,13 +158,13 @@ namespace NightRider.View
                 // A collected head reads as completed — collecting heads is the goal.
                 if (isHead && it.count >= 1)
                 {
-                    _menu.Glyph(CEmoji, r, it.emoji, good);
+                    _menu.Fill(CEmoji, r, 1, 1, good);
                     _menu.Run(CName, r, it.name, good);
                     _menu.Run(COwned, r, "COLLECTED", good);
                     continue;
                 }
 
-                _menu.Glyph(CEmoji, r, it.emoji, text);
+                _menu.Fill(CEmoji, r, 1, 1, ItemColors.Of(it.type));
                 _menu.Run(CName, r, it.name, text);
                 _menu.Run(COwned, r, "x" + it.count, text);
                 _menu.Run(CBuy, r, _post.BuyPrice(it.type).ToString(), dim);

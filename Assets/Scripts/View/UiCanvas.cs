@@ -70,9 +70,21 @@ namespace NightRider.View
 
         public Camera Cam => _canvas != null && _canvas.worldCamera != null ? _canvas.worldCamera : Camera.main;
 
-        // Screen point (px, origin bottom-left) -> local anchored position in `frame`.
+        // Screen point (px, origin bottom-left) -> anchored position for a child of a
+        // centre-anchored panel (Pickups / WorldBars), as an offset from the canvas
+        // centre. All our panels are centred on the canvas and (ConstantPixelSize)
+        // 1 unit = 1 px, so this is the old IMGUI screen-pixel placement — but with
+        // no RectTransformUtility false-return path that would leave a glyph
+        // unplaced/invisible. `frame` is unused (kept for call-site clarity).
         public bool ScreenToFrame(RectTransform frame, Vector3 screenPos, out Vector2 local)
-            => RectTransformUtility.ScreenPointToLocalPointInRectangle(frame, screenPos, Cam, out local);
+        {
+            var root = (RectTransform)(_canvas != null ? _canvas.transform : transform);
+            Vector2 size = root.rect.size;
+            local = new Vector2(
+                (screenPos.x / Mathf.Max(Screen.width,  1f) - 0.5f) * size.x,
+                (screenPos.y / Mathf.Max(Screen.height, 1f) - 0.5f) * size.y);
+            return true;
+        }
 
         public float CellWidth(RectTransform frame)  => frame.rect.width  / cols;
         public float CellHeight(RectTransform frame) => frame.rect.height / rows;
