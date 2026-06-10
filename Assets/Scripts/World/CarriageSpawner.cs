@@ -41,14 +41,39 @@ namespace NightRider.World
 
         [Header("Sprite")]
         public Texture2D carriageSheet;
+        [Tooltip("Shared NES sprite material (NightRider/NesSprite). Falls back to a runtime instance if unset.")]
+        public Material nesMaterial;
         public int sheetCols = 3, sheetRows = 4;
         public float pixelsPerUnit = 100f;
         public Vector2 pivot = new(0.5f, 0.5f);
         [Tooltip("View-angle (degrees) past which a carriage shows its left/right view.")]
         public float viewAngleThreshold = 18f;
 
+        [Header("NES palette — one per carriage row/type (top to bottom)")]
+        [Tooltip("Per type: three hex RRGGBB (snapped to NES, + transparent) and a vividness bias. " +
+                 "Defaults: grey + brown + (yellow / green / blue / red) by row.")]
+        public CarriagePalette[] carriagePalettes =
+        {
+            new() { c2 = "d9bf33" },   // row 0 accent: yellow
+            new() { c2 = "40b333" },   // row 1 accent: green
+            new() { c2 = "3359d9" },   // row 2 accent: blue
+            new() { c2 = "cc2e26" },   // row 3 accent: red
+        };
+
         readonly List<Carriage> _spawned = new();
         float _timer;
+        Material _nesMat;   // shared NesSprite material; per-row colours come from a property block
+
+        Material NesMat()
+        {
+            if (nesMaterial != null) return nesMaterial;
+            if (_nesMat == null)
+            {
+                var sh = Shader.Find("NightRider/NesSprite");
+                if (sh != null) _nesMat = new Material(sh);
+            }
+            return _nesMat;
+        }
 
         void OnEnable()
         {
@@ -171,6 +196,8 @@ namespace NightRider.World
                 cs.pixelsPerUnit = pixelsPerUnit;
                 cs.pivot = pivot;
                 cs.viewAngleThreshold = viewAngleThreshold;
+                cs.material = NesMat();
+                cs.palettes = carriagePalettes;
             }
             else
             {
