@@ -4776,11 +4776,12 @@ MonoBehaviour:
   rider: {fileID: 1220619574}
   network: {fileID: 1554921715}
   view: {fileID: 0}
-  maxCarriages: 8
+  maxCarriages: 4
   spawnAhead: 100
   despawnBehind: 25
   spawnInterval: 0.5
   occupyClearance: 6
+  postApproachClear: 180
   speedFraction: 0.8
   acceleration: 3
   wreckBrake: 40

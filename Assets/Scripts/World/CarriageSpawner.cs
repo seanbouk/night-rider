@@ -30,6 +30,8 @@ namespace NightRider.World
         public float spawnInterval = 0.4f;
         [Min(0f), Tooltip("Don't spawn within this distance of existing traffic.")]
         public float occupyClearance = 6f;
+        [Min(0f), Tooltip("Keep the run-up to a trading post clear: never spawn between the rider and a post that's within this distance ahead on the lane. 0 = off.")]
+        public float postApproachClear = 100f;
 
         [Header("Carriage")]
         [Range(0f, 1f)] public float speedFraction = 0.5f;
@@ -114,8 +116,34 @@ namespace NightRider.World
             else if (t > 1f) return;
 
             if (Carriage.Occupied(lane, t, occupyClearance)) return;
+            if (BlockedByPost(lane, baseT, t)) return;   // keep the run-up to a post clear
 
             Spawn(lane, t);
+        }
+
+        // True if the spawn point lands between the rider and a trading post that's
+        // within postApproachClear ahead on the same lane (so we never clutter the
+        // approach to a post the rider is heading for).
+        bool BlockedByPost(Lane lane, float baseT, float spawnT)
+        {
+            if (postApproachClear <= 0f) return false;
+            float len = lane.Length;
+            float spawnDist = Forward(baseT, spawnT, lane.Closed) * len;
+            foreach (var post in TradingPost.All)
+            {
+                if (post == null || post.lane != lane) continue;
+                float postDist = Forward(baseT, post.t, lane.Closed) * len;
+                if (postDist > spawnDist && postDist <= postApproachClear) return true;
+            }
+            return false;
+        }
+
+        // Forward arc fraction from a to b along the lane (wraps for closed loops).
+        static float Forward(float a, float b, bool closed)
+        {
+            float d = b - a;
+            if (closed) d -= Mathf.Floor(d);   // into [0,1)
+            return d;
         }
 
         void Spawn(Lane lane, float t)
