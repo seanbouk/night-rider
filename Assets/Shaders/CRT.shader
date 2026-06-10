@@ -1,18 +1,15 @@
-// CRT post-process, as a single URP fullscreen pass. Drive it with a "Full Screen
-// Pass Renderer Feature" on the URP Renderer, material = CRTMat, injection
-// AfterRenderingPostProcessing with color fetch.
+// CRT post-process. The MOSAIC must hit the world but NOT the UI (downsampling
+// crisp UI text wrecks it), while the HORIZONTAL BLUR and SCANLINES hit everything.
+// So the UI is rendered to its own texture (_UITex, set globally by UiCanvas) and
+// composited here AFTER the mosaic but BEFORE blur/scanlines:
 //
-// Now that ALL game UI renders on a Screen Space - Camera canvas (in the camera
-// colour, before this pass), this one pass covers the world AND the HUD/shop:
-//   1. MOSAIC  — snaps sampling to a 320x240-ish grid. Only the 240p height is
-//      fixed; the column count is derived from the window aspect so the tiles stay
-//      square (a wide debug window just shows more columns; the shipped 4:3 window
-//      lands on ~320 across).
-//   2. H-BLUR  — slight horizontal bleed between neighbouring mosaic columns. This
-//      also bleeds active-area colour a little into the black NES side pillars.
-//   3. SCANLINES — at 3x the mosaic's vertical granularity: each 240p line is three
-//      rows — a bright BEAM in the middle, BLOOM rows above/below that the brightest
-//      colours bleed into (dark pixels keep dark gaps).
+//   world (_BlitTexture)  -> mosaic (nearest, 240p)        [world only]
+//   UI (_UITex)           -> hard 0.5 cutout, laid on top  [crisp, no mosaic]
+//   then  -> horizontal blur -> scanlines                  [the whole composite]
+//
+//   1. MOSAIC  — snap to a 320x240-ish grid, point-sampled (no interpolation).
+//   2. H-BLUR  — slight bleed between neighbouring mosaic columns.
+//   3. SCANLINES — 3x granularity: beam in the middle row, bloom rows above/below.
 
 Shader "NightRider/CRT"
 {
@@ -57,9 +54,27 @@ Shader "NightRider/CRT"
             float _BeamSoftness;
             float _BloomStrength;
 
-            half3 SampleScreen(float2 uv)
+            TEXTURE2D(_UITex);   // UI rendered to its own RT (set globally by UiCanvas)
+
+            float2 MosaicCell()
             {
-                return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv).rgb;
+                float vRes   = max(_PixelHeight, 1.0);
+                float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
+                return 1.0 / float2(vRes * aspect, vRes);
+            }
+
+            // World, mosaiced (nearest-neighbour to the 240p grid).
+            half3 World(float2 uv, float2 cell)
+            {
+                float2 muv = (floor(uv / cell) + 0.5) * cell;
+                return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_PointClamp, muv).rgb;
+            }
+
+            // UI (crisp, hard cutout) over the mosaiced world.
+            half3 Composite(float2 uv, float2 cell)
+            {
+                half4 ui = SAMPLE_TEXTURE2D(_UITex, sampler_PointClamp, uv);
+                return ui.a >= 0.5 ? ui.rgb : World(uv, cell);
             }
 
             half4 frag (Varyings input) : SV_Target
@@ -67,28 +82,27 @@ Shader "NightRider/CRT"
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
                 float2 uv = input.texcoord;
 
-                half3 raw = SampleScreen(uv);
-                if (_Enabled < 0.5) return half4(raw, 1.0);
+                if (_Enabled < 0.5)
+                {
+                    // No CRT: still need the UI laid over the (un-mosaiced) world.
+                    half4 ui = SAMPLE_TEXTURE2D(_UITex, sampler_PointClamp, uv);
+                    half3 w  = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_PointClamp, uv).rgb;
+                    return half4(ui.a >= 0.5 ? ui.rgb : w, 1.0);
+                }
 
-                // 1. Mosaic: square 240p tiles (columns scale with window aspect).
-                float vRes   = max(_PixelHeight, 1.0);
-                float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
-                float2 res   = float2(vRes * aspect, vRes);
-                float2 cell  = 1.0 / res;
-                float2 muv   = (floor(uv * res) + 0.5) * cell;
+                float2 cell = MosaicCell();
 
-                // 2. Horizontal blur across neighbouring mosaic columns.
-                half3 c  = SampleScreen(muv);
-                half3 cL = SampleScreen(muv - float2(cell.x, 0.0));
-                half3 cR = SampleScreen(muv + float2(cell.x, 0.0));
+                // Horizontal blur across the composite (world mosaic + UI on top).
+                half3 c  = Composite(uv, cell);
+                half3 cL = Composite(uv - float2(cell.x, 0.0), cell);
+                half3 cR = Composite(uv + float2(cell.x, 0.0), cell);
                 float w  = saturate(_HBlur) * 0.5;
                 half3 col = c * (1.0 - 2.0 * w) + (cL + cR) * w;
 
-                // 3. Scanlines at _SubRows x granularity. Beam = middle 1/_SubRows of
-                //    the line; the gap rows are lifted by the pixel's brightness.
+                // Scanlines at _SubRows x granularity, with brightness-fed bloom.
                 float sub      = max(_SubRows, 1.0);
-                float f        = frac(uv.y * vRes);          // 0..1 within one 240p line
-                float beamHalf = 0.5 / sub;                  // middle row half-width
+                float f        = frac(uv.y * max(_PixelHeight, 1.0));
+                float beamHalf = 0.5 / sub;
                 float d        = abs(f - 0.5);
                 float beam     = 1.0 - smoothstep(beamHalf, beamHalf + _BeamSoftness, d);
                 float luma     = max(col.r, max(col.g, col.b));

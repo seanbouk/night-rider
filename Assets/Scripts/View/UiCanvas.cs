@@ -1,8 +1,13 @@
-// The screen-space canvas that ALL game UI lives on, built at runtime. It renders
-// in Screen Space - Camera mode so URP draws it into the camera colour BEFORE the
-// CRT fullscreen pass (AfterPostProcessing) — which is what lets the CRT mosaic,
-// scanlines, bloom, and horizontal blur cover the HUD and shop, and bleed active
-// colour into the black side pillars.
+// The screen-space canvas that ALL game UI lives on, built at runtime.
+//
+// The UI must get the CRT's scanlines + horizontal blur, but NOT the mosaic
+// (downsampling crisp pixel text to 240p wrecks it). One fullscreen pass can't
+// mosaic the world yet skip the UI if they share a buffer, so the UI is rendered
+// to its OWN texture by a dedicated UICamera and published as the global _UITex.
+// CRT.shader mosaics the world, lays this crisp UI over it (hard 0.5 alpha
+// cutout), then runs blur + scanlines across the whole composite. Net: mosaic =
+// world only; blur + scanlines = everything. (The UI is thus only visible through
+// the CRT pass — fine, it always runs in-game.)
 //
 // Layout mirrors the old IMGUI framing: a centred 4:3 area on a 40x30 grid where
 // each cell is one 8x8 NES tile. The black SIDE PILLARS (the TV doesn't reach the
@@ -11,6 +16,7 @@
 
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;
 
 namespace NightRider.View
 {
@@ -52,7 +58,12 @@ namespace NightRider.View
         public RectTransform MenuFrame { get; private set; }   // 4:3 grid inside the menu
 
         Canvas _canvas;
+        Camera _uiCam;            // renders the canvas to _uiRT only
+        RenderTexture _uiRT;      // UI texture the CRT composites in (the global _UITex)
+        int _uiLayer;             // layer the UICamera renders (and only it)
+        static int s_uiLayer = 5; // same, for the static factory (NewRect) to stamp on creation
         bool _built;
+        static readonly int UITexId = Shader.PropertyToID("_UITex");
 
         void Awake()
         {
@@ -61,14 +72,26 @@ namespace NightRider.View
             Build();
         }
 
-        void OnDestroy() { if (_instance == this) _instance = null; }
+        void OnDestroy()
+        {
+            if (_uiCam != null) _uiCam.targetTexture = null;
+            if (_uiRT != null) { _uiRT.Release(); Destroy(_uiRT); _uiRT = null; }
+            if (_instance == this) _instance = null;
+        }
 
         void LateUpdate()
         {
-            if (_canvas != null && _canvas.worldCamera == null) _canvas.worldCamera = Camera.main;
+            if (!_built) return;
+            EnsureRT();
+            // Keep every UI object on the UI layer so the UICamera (and only it)
+            // renders them — covers runtime-spawned glyphs/pickups/bars too.
+            if (_canvas != null) SetLayerRecursively(_canvas.gameObject, _uiLayer);
+            Shader.SetGlobalTexture(UITexId, _uiRT);
         }
 
-        public Camera Cam => _canvas != null && _canvas.worldCamera != null ? _canvas.worldCamera : Camera.main;
+        // The WORLD camera — sprites/bars project through this (the UICamera only
+        // ever renders the flat canvas to its RT).
+        public Camera Cam => Camera.main;
 
         // Screen point (px, origin bottom-left) -> anchored position for a child of a
         // centre-anchored panel (Pickups / WorldBars), as an offset from the canvas
@@ -96,11 +119,38 @@ namespace NightRider.View
             if (_built) return;
             _built = true;
 
+            _uiLayer = LayerMask.NameToLayer("UI");
+            if (_uiLayer < 0) _uiLayer = 5;   // built-in "UI" layer
+            s_uiLayer = _uiLayer;
+
+            // Dedicated camera that renders ONLY the canvas, into _uiRT. Lowest depth
+            // so it runs before the main camera (whose CRT pass reads the result).
+            var camGo = new GameObject("UICamera");
+            camGo.transform.SetParent(transform, false);
+            _uiCam = camGo.AddComponent<Camera>();
+            _uiCam.orthographic = true;
+            _uiCam.clearFlags = CameraClearFlags.SolidColor;
+            _uiCam.backgroundColor = new Color(0f, 0f, 0f, 0f);   // transparent
+            _uiCam.cullingMask = 1 << _uiLayer;                    // canvas only, never the world
+            _uiCam.depth = -100;
+            _uiCam.nearClipPlane = 0.1f;
+            _uiCam.farClipPlane = 100f;
+            _uiCam.allowMSAA = false;
+            _uiCam.allowHDR = false;
+            // Use the CRT-free renderer (index 1 = Mobile_Renderer in PC_RPAsset) so
+            // the CRT fullscreen pass does NOT run on the UI render (it would mosaic
+            // the UI and feed _uiRT back into itself). The main camera keeps index 0.
+            var camData = _uiCam.GetUniversalAdditionalCameraData();
+            if (camData != null) camData.SetRenderer(1);
+
             var go = new GameObject("GameUiCanvas", typeof(RectTransform));
             go.transform.SetParent(transform, false);
             _canvas = go.AddComponent<Canvas>();
+            // Screen Space - Camera bound to the UICamera: the canvas renders into
+            // _uiRT (and only via that camera), so the main camera never draws it.
+            // CRT.shader composites _uiRT over the mosaiced world.
             _canvas.renderMode = RenderMode.ScreenSpaceCamera;
-            _canvas.worldCamera = Camera.main;
+            _canvas.worldCamera = _uiCam;
             _canvas.planeDistance = planeDistance;
             _canvas.sortingOrder = 100;
             var scaler = go.AddComponent<CanvasScaler>();
@@ -121,6 +171,36 @@ namespace NightRider.View
             MenuRoot.gameObject.SetActive(false);
 
             BuildPillars();
+
+            SetLayerRecursively(go, _uiLayer);
+            EnsureRT();
+        }
+
+        // (Re)create the UI render texture at screen size and bind it as _UITex.
+        void EnsureRT()
+        {
+            int w = Mathf.Max(1, Screen.width);
+            int h = Mathf.Max(1, Screen.height);
+            if (_uiRT != null && _uiRT.width == w && _uiRT.height == h) return;
+
+            if (_uiRT != null) { _uiCam.targetTexture = null; _uiRT.Release(); Destroy(_uiRT); }
+            _uiRT = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32)
+            {
+                name = "UITex",
+                filterMode = FilterMode.Point,   // crisp 1:1 when the CRT samples it
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            _uiRT.Create();
+            _uiCam.targetTexture = _uiRT;
+            Shader.SetGlobalTexture(UITexId, _uiRT);
+        }
+
+        static void SetLayerRecursively(GameObject go, int layer)
+        {
+            if (go.layer != layer) go.layer = layer;
+            var t = go.transform;
+            for (int i = 0; i < t.childCount; i++)
+                SetLayerRecursively(t.GetChild(i).gameObject, layer);
         }
 
         void BuildPillars()
@@ -187,7 +267,7 @@ namespace NightRider.View
 
         static RectTransform NewRect(string name, Transform parent)
         {
-            var go = new GameObject(name, typeof(RectTransform));
+            var go = new GameObject(name, typeof(RectTransform)) { layer = s_uiLayer };
             go.transform.SetParent(parent, false);
             return (RectTransform)go.transform;
         }

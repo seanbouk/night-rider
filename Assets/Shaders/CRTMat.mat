@@ -25,12 +25,12 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _BeamSoftness: 0.245
-    - _BloomStrength: 1
+    - _BeamSoftness: 0.299
+    - _BloomStrength: 0.805
     - _Enabled: 1
-    - _HBlur: 0.4
+    - _HBlur: 0.284
     - _PixelHeight: 240
-    - _ScanlineStrength: 0.533
+    - _ScanlineStrength: 1
     - _SubRows: 3
     m_Colors: []
   m_BuildTextureStacks: []
