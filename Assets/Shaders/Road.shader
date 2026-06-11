@@ -1,6 +1,8 @@
-// Super-scaler road. Unlit (flat NES look). Two GREYSCALE layered textures —
-// TRACKS (opaque base) with GRASS on top (its own alpha is the cutout; grass's
-// transparent texels reveal the tracks). Each layer is tinted by a MULTIPLY colour
+// Super-scaler road. Unlit (flat NES look). Two GREYSCALE+ALPHA layered textures —
+// TRACKS on the bottom with GRASS on top. Each layer's own alpha is a hard cutout
+// (>= 0.5): grass shows where its alpha covers; otherwise tracks show where THEIR
+// alpha covers; where neither covers, the road itself is cut out (clipped) so the
+// sky/ground behind shows through. Each layer is tinted by a MULTIPLY colour
 // (white in the texture becomes that colour, greys become darker shades of it),
 // then the visible pixel is snapped to the nearest NES palette colour. Tint +
 // snap are done in sRGB so the multiply reads intuitively and the snap is
@@ -17,7 +19,7 @@ Shader "NightRider/Road"
 {
     Properties
     {
-        [NoScaleOffset] _TracksTex ("Tracks (bottom, greyscale)", 2D) = "white" {}
+        [NoScaleOffset] _TracksTex ("Tracks (bottom, greyscale + alpha)", 2D) = "white" {}
         [NoScaleOffset] _GrassTex  ("Grass (top, greyscale + alpha)", 2D) = "black" {}
         _TracksColor ("Tracks multiply (white = this)", Color) = (1, 1, 1, 1)
         _GrassColor  ("Grass multiply (white = this)",  Color) = (1, 1, 1, 1)
@@ -134,8 +136,13 @@ Shader "NightRider/Road"
                 float3 gTracks = LinearToSRGB(tracks.rgb) * LinearToSRGB(_TracksColor.rgb);
                 float3 gGrass  = LinearToSRGB(grass.rgb)  * LinearToSRGB(_GrassColor.rgb);
 
-                // Grass texel's own alpha is the cutout — opaque grass over tracks.
-                float3 chosen = grass.a >= 0.5 ? gGrass : gTracks;
+                // Each layer's alpha is a hard cutout: grass over tracks, and where
+                // NEITHER covers, clip the road away so the sky/ground shows through.
+                float3 chosen;
+                if (grass.a >= 0.5)       chosen = gGrass;
+                else if (tracks.a >= 0.5) chosen = gTracks;
+                else { clip(-1); return half4(0, 0, 0, 0); }
+
                 return half4(SnapNes(saturate(chosen)), 1.0);
             }
             ENDHLSL
