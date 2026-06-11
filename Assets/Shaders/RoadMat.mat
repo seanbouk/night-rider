@@ -146,11 +146,11 @@ Material:
     - _BaseColor: {r: 0.4245283, g: 0.2698849, b: 0.16620682, a: 1}
     - _Color: {r: 0.42452827, g: 0.26988488, b: 0.16620678, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _GrassColor: {r: 0.32058558, g: 0.3584906, b: 0.10653258, a: 1}
+    - _GrassColor: {r: 0.20705765, g: 0.4433962, b: 0.30477747, a: 1}
     - _GrassTiling: {r: 0.1, g: 1, b: 0, a: 0}
     - _LineColor: {r: 0.85, g: 0.8, b: 0.45, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
-    - _TracksColor: {r: 0.46226418, g: 0.11980448, b: 0.05887327, a: 1}
+    - _TracksColor: {r: 0.4433962, g: 0.27556923, b: 0.24470451, a: 1}
     - _TracksTiling: {r: 0.1, g: 1, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
