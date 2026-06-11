@@ -115,6 +115,8 @@ namespace NightRider.View
             _grad.SetPixels32(px);
             _grad.Apply();
             _mat.SetTexture("_Gradient", _grad);
+            // Publish for the cloud layer (CloudLayer/Cloud.shader add over this).
+            Shader.SetGlobalTexture("_SkyGradient", _grad);
 
             _lastSky = skyColor;
             _lastGround = groundColor;
