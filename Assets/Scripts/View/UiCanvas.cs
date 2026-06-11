@@ -41,7 +41,7 @@ namespace NightRider.View
         public int cols = 40;
         [Tooltip("Grid height in 8x8 cells (NES 240px / 8 = 30).")]
         public int rows = 30;
-        [Tooltip("Black NES side pillars: this many columns each side (the TV doesn't reach the edge).")]
+        [Tooltip("Inset the play area by this many columns each side; the black pillars fill from there out to the screen edge.")]
         public int sideColumns = 3;
         public Color pillarColor = Color.black;
         [Tooltip("UI plane distance from the camera (between near and far clip).")]
@@ -203,22 +203,40 @@ namespace NightRider.View
                 SetLayerRecursively(t.GetChild(i).gameObject, layer);
         }
 
+        // How far (px) the pillars overrun the frame to reach the real screen edge.
+        // The inner edge stays anchored to the play-area boundary; the outer/top/
+        // bottom edges run well past any window so the world never peeks out on a
+        // wider-than-4:3 (or taller) display.
+        const float PillarOverscan = 4000f;
+
         void BuildPillars()
         {
             if (sideColumns <= 0) return;
-            AddPillar("PillarL", 0f, (float)sideColumns / cols);
-            AddPillar("PillarR", (float)(cols - sideColumns) / cols, 1f);
+            AddPillar("PillarL", -1);
+            AddPillar("PillarR", +1);
         }
 
-        void AddPillar(string name, float xMin, float xMax)
+        void AddPillar(string name, int side)
         {
             var img = MakeImage(HudPanel, pillarColor);
             img.name = name;
             var rt = img.rectTransform;
-            rt.anchorMin = new Vector2(xMin, 0f);
-            rt.anchorMax = new Vector2(xMax, 1f);
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
+            float inner = (float)sideColumns / cols;   // play-area boundary (frame fraction)
+
+            if (side < 0)   // left pillar: screen edge .. inner boundary
+            {
+                rt.anchorMin = new Vector2(0f, 0f);
+                rt.anchorMax = new Vector2(inner, 1f);
+                rt.offsetMin = new Vector2(-PillarOverscan, -PillarOverscan);
+                rt.offsetMax = new Vector2(0f, PillarOverscan);
+            }
+            else            // right pillar: inner boundary .. screen edge
+            {
+                rt.anchorMin = new Vector2(1f - inner, 0f);
+                rt.anchorMax = new Vector2(1f, 1f);
+                rt.offsetMin = new Vector2(0f, -PillarOverscan);
+                rt.offsetMax = new Vector2(PillarOverscan, PillarOverscan);
+            }
         }
 
         RectTransform Make43Frame(string name, Transform parent)
