@@ -46,6 +46,10 @@ namespace NightRider.World
         [Min(0f), Tooltip("Hide the post beyond this distance from the camera (0 = always visible). Match the road's Max Distance so it pops in at the horizon.")]
         public float maxRenderDistance = 0f;
 
+        [Header("Editor visibility")]
+        [Min(0f), Tooltip("Height of the scene-view beacon so the post is easy to spot/position.")]
+        public float gizmoBeaconHeight = 6f;
+
         [Header("Trigger")]
         [Min(0f), Tooltip("Run-into range along the post's lane.")]
         public float runIntoDistance = 3f;
@@ -199,13 +203,48 @@ namespace NightRider.World
             mr.sharedMaterial = m;
         }
 
-        // Scene-view placement aid (edit mode): marker at lane + t.
+        // Scene-view placement aid: a tall labelled beacon at the post's real spot
+        // (lane + t, NOT the GameObject's transform), plus the run-into catch band
+        // along the lane — so posts are easy to find and position.
         void OnDrawGizmos()
         {
             if (lane == null || !lane.IsValid) return;
-            lane.EvaluateWorld(Mathf.Clamp01(t), out var pos, out _, out _);
-            Gizmos.color = new Color(ghostColor.r, ghostColor.g, ghostColor.b, 0.9f);
-            Gizmos.DrawWireSphere(pos + Vector3.up * heightOffset, 2f);
+
+            float tt = Mathf.Clamp01(t);
+            lane.EvaluateWorld(tt, out var pos, out _, out _);
+            Color c = ghostColor; c.a = 1f;
+            Vector3 baseP = pos + Vector3.up * heightOffset;
+            Vector3 topP  = pos + Vector3.up * (heightOffset + gizmoBeaconHeight);
+
+            // Tall beacon + markers — visible from any distance/angle.
+            Gizmos.color = c;
+            Gizmos.DrawLine(pos, topP);
+            Gizmos.DrawWireSphere(baseP, 1.2f);
+            Gizmos.DrawSphere(topP, 0.7f);
+
+            // Run-into catch band along the lane (where running in opens the shop).
+            float len = lane.Length;
+            if (len > 0.01f)
+            {
+                Gizmos.color = new Color(c.r, c.g, c.b, 0.6f);
+                float dt = runIntoDistance / len;
+                Vector3 prev = pos;
+                const int steps = 8;
+                for (int i = 0; i <= steps; i++)
+                {
+                    float s = tt + Mathf.Lerp(-dt, dt, i / (float)steps);
+                    if (lane.Closed) s -= Mathf.Floor(s); else s = Mathf.Clamp01(s);
+                    lane.EvaluateWorld(s, out var p, out _, out _);
+                    if (i > 0) Gizmos.DrawLine(prev, p);
+                    prev = p;
+                }
+            }
+
+#if UNITY_EDITOR
+            var style = new GUIStyle(UnityEditor.EditorStyles.boldLabel) { alignment = TextAnchor.MiddleCenter };
+            style.normal.textColor = c;
+            UnityEditor.Handles.Label(topP + Vector3.up * 0.6f, postName, style);
+#endif
         }
     }
 }
