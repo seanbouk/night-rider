@@ -37,6 +37,8 @@ namespace NightRider.World
         public Color ghostColor = new(1f, 0.85f, 0.2f, 0.35f);
         public Vector3 ghostScale = new(0.8f, 0.8f, 2.0f);
         public float heightOffset = 0.6f;
+        [Min(0f), Tooltip("Hide the post beyond this distance from the camera (0 = always visible). Match the road's Max Distance so it pops in at the horizon.")]
+        public float maxRenderDistance = 0f;
 
         [Header("Trigger")]
         [Min(0f), Tooltip("Run-into range along the post's lane.")]
@@ -47,6 +49,7 @@ namespace NightRider.World
         Transform _ghost;
         LaneFollower _rider;
         TradingMenu _menu;
+        Camera _cam;
         bool _armed = true;
 
         // Prices cached from the PriceMap at this post's (fixed) position.
@@ -90,6 +93,17 @@ namespace NightRider.World
                 _ghost.position = pos + Vector3.up * heightOffset;
                 Vector3 flat = Vector3.ProjectOnPlane(fwd, Vector3.up);
                 if (flat.sqrMagnitude > 1e-6f) _ghost.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
+
+                // Hide it past the cutoff so it pops in at the road's horizon.
+                if (maxRenderDistance > 0f)
+                {
+                    if (_cam == null) _cam = Camera.main;
+                    if (_cam != null)
+                    {
+                        bool visible = Vector3.Distance(_ghost.position, _cam.transform.position) <= maxRenderDistance;
+                        if (_ghost.gameObject.activeSelf != visible) _ghost.gameObject.SetActive(visible);
+                    }
+                }
             }
 
             if (Time.timeScale == 0f) return;        // menu open / paused
