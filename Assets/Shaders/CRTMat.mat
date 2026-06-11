@@ -26,7 +26,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _BeamBrightWiden: 3
-    - _BeamWidth: 0.05
+    - _BeamWidth: 0.08
     - _BloomAmount: 0.185
     - _BloomCurve: 3.093
     - _BloomThreshold: 0
