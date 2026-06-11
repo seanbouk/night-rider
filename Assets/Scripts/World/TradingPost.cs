@@ -26,6 +26,12 @@ namespace NightRider.World
         [Min(0)] public int buyPrice = 20;
         [Min(0)] public int sellPrice = 18;
 
+        [Header("Head granted here")]
+        [Tooltip("32x32 head image shown in the HUD while this head is selected.")]
+        public Texture2D headImage;
+        [Tooltip("Music track that loops while this head is selected.")]
+        public AudioClip headTrack;
+
         [Header("Placeholder ghost")]
         public bool showGhost = true;
         [Tooltip("2x1 ghost sheet: right = before the head, left = after. (Capsule used if empty.)")]

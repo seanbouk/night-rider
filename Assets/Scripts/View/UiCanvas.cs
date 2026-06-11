@@ -56,6 +56,8 @@ namespace NightRider.View
         public RectTransform PausePanel { get; private set; }  // pause box
         public RectTransform MenuRoot { get; private set; }    // full-screen, on top (toggled)
         public RectTransform MenuFrame { get; private set; }   // 4:3 grid inside the menu
+        public RectTransform TitleRoot { get; private set; }   // full-screen black, very top (title screen)
+        public RectTransform TitleFrame { get; private set; }  // 4:3 grid inside the title
 
         Canvas _canvas;
         Camera _uiCam;            // renders the canvas to _uiRT only
@@ -169,6 +171,14 @@ namespace NightRider.View
             Stretch(bg.rectTransform);
             MenuFrame = Make43Frame("MenuFrame", MenuRoot);
             MenuRoot.gameObject.SetActive(false);
+
+            // Title screen: full-screen black backdrop + a 4:3 grid, above everything.
+            TitleRoot = MakePanel("Title", root);
+            var tbg = MakeImage(TitleRoot, Color.black);
+            tbg.name = "Bg";
+            Stretch(tbg.rectTransform);
+            TitleFrame = Make43Frame("TitleFrame", TitleRoot);
+            TitleRoot.gameObject.SetActive(false);
 
             BuildPillars();
 

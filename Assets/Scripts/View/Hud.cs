@@ -53,6 +53,7 @@ namespace NightRider.View
 
         GlyphGrid _hud, _pause;
         readonly List<Image> _pickViews = new();
+        Image _headView;
         bool _paused;
 
         // ----------------------------------------------------------- sim / input
@@ -61,8 +62,8 @@ namespace NightRider.View
         {
             PublishScreenArea();
 
-            // Start toggles pause (unless the trade menu, which has its own pause, is up).
-            if (!TradingMenu.Active && Controls.Start)
+            // Start toggles pause (unless the trade menu or title screen is up).
+            if (!TradingMenu.Active && !TitleScreen.Active && Controls.Start)
             {
                 _paused = !_paused;
                 Time.timeScale = _paused ? 0f : 1f;
@@ -131,15 +132,40 @@ namespace NightRider.View
                 for (int i = 0; i < 3 && i < items.Count; i++)     DrawCompact(colA, itemRow + i, ItemColors.Of(items[i].type), items[i].count);
                 for (int i = 0; i < 3 && i + 3 < items.Count; i++) DrawCompact(colB, itemRow + i, ItemColors.Of(items[i + 3].type), items[i + 3].count);
 
-                // Head box, 4x4, horizontally centred (faint reserved slot).
+                // Head box, 4x4 (= 32x32px), horizontally centred. Faint when empty;
+                // the current head's image fills it (the default slot shows no head).
                 _hud.Fill(boxCol, top, boxW, boxH, headFill);
+                ShowHead(ui, boxCol, top, boxW, boxH);
 
                 // Right of the box: level then gold (item-style), dropped down.
                 int rightCol = boxCol + boxW + 1;
                 _hud.Run(rightCol, top + 1, player.level, hudText);
                 DrawCompact(rightCol, top + 3, goldColor, player.gold);
             }
+            else if (_headView != null) _headView.enabled = false;
             _hud.End();
+        }
+
+        // The current head's 32x32 image in the head box (hidden on the default slot).
+        void ShowHead(UiCanvas ui, int col, int row, int w, int h)
+        {
+            if (_headView == null)
+            {
+                _headView = UiCanvas.MakeImage(ui.HudPanel, Color.white);   // after the grid layers -> on top of the box
+                _headView.name = "Head";
+                _headView.preserveAspect = true;
+            }
+
+            var sp = MusicDirector.Instance != null ? MusicDirector.Instance.CurrentHeadSprite : null;
+            var rt = _headView.rectTransform;
+            float C = ui.cols, R = ui.rows;
+            rt.anchorMin = new Vector2(col / C, 1f - (row + h) / R);
+            rt.anchorMax = new Vector2((col + w) / C, 1f - row / R);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            _headView.enabled = sp != null;
+            if (sp != null) _headView.sprite = sp;
         }
 
         // [icon]  ×  ### (zero-padded to three digits, clamped 0-999) — 5 cells.

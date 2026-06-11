@@ -84,7 +84,10 @@ namespace NightRider.View
             int d = prev + dir;
 
             if (it.type == ItemType.Heads)
-                d = Mathf.Clamp(d, 0, Mathf.Max(0, 1 - it.count));   // buy-only, one, kept forever
+            {
+                bool owned = MusicDirector.Instance != null && MusicDirector.Instance.Has(_post);
+                d = Mathf.Clamp(d, 0, owned ? 0 : 1);   // buy this post's head once
+            }
             else if (d < -it.count)
                 d = -it.count;                                       // can't oversell
 
@@ -120,8 +123,14 @@ namespace NightRider.View
             int change = GoldChange();
             if (!AnyDelta() || player.gold + change < 0) return false;
             player.gold += change;
-            for (int i = 0; i < player.items.Count; i++) player.Add(player.items[i].type, _delta[i]);
+            bool boughtHead = false;
+            for (int i = 0; i < player.items.Count; i++)
+            {
+                if (_delta[i] > 0 && player.items[i].type == ItemType.Heads) boughtHead = true;
+                player.Add(player.items[i].type, _delta[i]);
+            }
             System.Array.Clear(_delta, 0, _delta.Length);
+            if (boughtHead) MusicDirector.Instance.Acquire(_post);   // switch to this head + its track
             return true;
         }
 
@@ -162,7 +171,7 @@ namespace NightRider.View
                 if (sel) _menu.Glyph(CCursor, r, ">", good);
 
                 // A collected head reads as completed — collecting heads is the goal.
-                if (isHead && it.count >= 1)
+                if (isHead && MusicDirector.Instance != null && MusicDirector.Instance.Has(_post))
                 {
                     _menu.Fill(CEmoji, r, 1, 1, good);
                     _menu.Run(CName, r, it.name, good);
