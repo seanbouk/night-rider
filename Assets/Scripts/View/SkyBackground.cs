@@ -115,8 +115,11 @@ namespace NightRider.View
             _grad.SetPixels32(px);
             _grad.Apply();
             _mat.SetTexture("_Gradient", _grad);
-            // Publish for the cloud layer (CloudLayer/Cloud.shader add over this).
+            // Publish for the cloud layer (CloudLayer/Cloud.shader add over this) and
+            // the road (its tracks merge into the ground colour). sRGB, raw — both
+            // snap it to the same NES colour as this gradient's ground rows.
             Shader.SetGlobalTexture("_SkyGradient", _grad);
+            Shader.SetGlobalColor("_GroundColor", groundColor.linear);   // shader does LinearToSRGB (matches _TracksColor)
 
             _lastSky = skyColor;
             _lastGround = groundColor;

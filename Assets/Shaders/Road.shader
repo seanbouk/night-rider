@@ -68,6 +68,7 @@ Shader "NightRider/Road"
 
             float  _RoadScroll;
             float3 _RoadFlowDir;
+            half4  _GroundColor;   // below-horizon sky colour (sRGB), set by SkyBackground
 
             // NES 2C02 palette (0-255 sRGB).
             static const float3 NES[64] =
@@ -132,9 +133,13 @@ Shader "NightRider/Road"
                 half4 grass  = SAMPLE_TEXTURE2D(_GrassTex,  sampler_GrassTex,  gUV);
                 half4 tracks = SAMPLE_TEXTURE2D(_TracksTex, sampler_TracksTex, tUV);
 
-                // Tint greyscale by the multiply colour, in sRGB (white -> the colour).
-                float3 gTracks = LinearToSRGB(tracks.rgb) * LinearToSRGB(_TracksColor.rgb);
-                float3 gGrass  = LinearToSRGB(grass.rgb)  * LinearToSRGB(_GrassColor.rgb);
+                // Tracks: lerp from the GROUND colour (dark texels) up to the tracks
+                // multiply colour (bright texels), so the dark end of the asset merges
+                // into the below-horizon ground colour instead of crushing to black.
+                // Grass stays a plain multiply (white -> the colour). Both in sRGB.
+                float  tShade  = LinearToSRGB(tracks.rgb).g;
+                float3 gTracks = lerp(LinearToSRGB(_GroundColor.rgb), LinearToSRGB(_TracksColor.rgb), tShade);
+                float3 gGrass  = LinearToSRGB(grass.rgb) * LinearToSRGB(_GrassColor.rgb);
 
                 // Each layer's alpha is a hard cutout: grass over tracks, and where
                 // NEITHER covers, clip the road away so the sky/ground shows through.
