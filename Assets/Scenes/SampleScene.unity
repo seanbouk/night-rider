@@ -4688,7 +4688,7 @@ MonoBehaviour:
   network: {fileID: 1554921715}
   view: {fileID: 0}
   maxCarriages: 4
-  spawnAhead: 100
+  spawnAhead: 50
   despawnBehind: 25
   spawnInterval: 0.5
   occupyClearance: 6
