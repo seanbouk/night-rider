@@ -104,12 +104,12 @@
     margin-left: calc(50% - 50vw);
     display: flex;
     justify-content: center;
-    padding: 18px 16px 0;
+    padding: 18px 0 0;
   }
 
   .monitor {
     width: var(--col);                 /* 960 = column width (glass + bezel both fill it) */
-    max-width: calc(100vw - 32px);
+    max-width: 100vw;                  /* fill the viewport before the column scales */
     aspect-ratio: 4 / 3;
     position: relative;
     border-radius: 14px;
