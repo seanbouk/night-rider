@@ -1,49 +1,679 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>{{{ PRODUCT_NAME }}}</title>
-    <style>
-      html, body { margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden; }
-      body { display: flex; align-items: center; justify-content: center; }
-      /* Fixed 960 x 720 (4:3), black. */
-      #unity-canvas { width: 960px; height: 720px; background: #000; display: block; }
-      #unity-loading {
-        position: absolute; color: #cfcfcf; font: 14px/1 monospace; letter-spacing: 2px;
-        text-transform: uppercase;
-      }
-    </style>
-  </head>
-  <body>
-    <canvas id="unity-canvas" width="960" height="720" tabindex="-1"></canvas>
-    <div id="unity-loading">loading&hellip;</div>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>{{{ PRODUCT_NAME }}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0a0b0d;
+    --ink: #d4d8dc;
+    --ink-dim: #7c838b;
+    --ink-faint: #4b5159;
+    --hair: #1c2026;
+    --metal-1: #34383d;
+    --metal-2: #23262b;
+    --metal-3: #15171b;
+    --led-on: #43ff84;
+    --led-off: #0e2716;
+    --phos: #5fff9e;
 
-    <script src="Build/{{{ LOADER_FILENAME }}}"></script>
-    <script>
-      var loading = document.querySelector("#unity-loading");
-      createUnityInstance(document.querySelector("#unity-canvas"), {
-        dataUrl: "Build/{{{ DATA_FILENAME }}}",
-        frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
-        codeUrl: "Build/{{{ CODE_FILENAME }}}",
+    /* function-trace colours (CRT phosphors) */
+    --fn-move: #56d6c2;
+    --fn-atkL: #ff6f91;
+    --fn-atkR: #ffc24d;
+    --fn-music: #9b8cff;
+    --fn-start: #5fff9e;
+
+    --col: 960px;
+    --mon-w: 960px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(120% 80% at 50% -10%, #14171c 0%, var(--bg) 55%) fixed,
+      var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 0 120px;
+    overflow-x: hidden;
+  }
+
+  .col {
+    width: var(--col);
+    max-width: calc(100vw - 32px);
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 30px 0 22px;
+    border-bottom: 1px solid var(--hair);
+    margin-bottom: 34px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-led {
+    width: 11px; height: 11px; border-radius: 50%;
+    background: var(--led-on);
+    box-shadow: 0 0 9px var(--led-on), inset 0 0 2px #fff;
+  }
+  .brand-title {
+    font-family: "Silkscreen", monospace;
+    font-size: 26px;
+    letter-spacing: 1px;
+    color: var(--ink);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .brand-title span { color: var(--phos); }
+  .masthead .meta {
+    text-align: right;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .masthead .meta b { color: var(--ink); font-weight: 600; }
+
+  .eyebrow {
+    font-family: "Silkscreen", monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--fn-move);
+    margin: 0 0 12px;
+  }
+
+  /* ---------- monitor band ---------- */
+  .monitor-band {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    display: flex;
+    justify-content: center;
+    padding: 18px 16px 0;
+  }
+
+  .monitor {
+    width: var(--mon-w);
+    max-width: calc(100vw - 32px);
+    aspect-ratio: 4 / 3;
+    position: relative;
+    transition: width 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
+    /* housing */
+    padding: 2.4%;
+    border-radius: 14px;
+    background:
+      linear-gradient(180deg, var(--metal-1), var(--metal-2) 60%, var(--metal-3));
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.06) inset,
+      0 -24px 40px rgba(0,0,0,0.5) inset,
+      0 30px 60px -20px rgba(0,0,0,0.8);
+  }
+
+  /* the glass / picture tube */
+  .screen {
+    position: absolute;
+    inset: 2.4%;
+    border-radius: 8px;   /* bezel opening — the CRT "glass" look comes from the in-engine renderer */
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 0 0 3px #000, 0 0 0 5px #2a2d31;
+  }
+
+  /* the actual game viewport (Unity WebGL mounts inside #game) */
+  #game {
+    position: absolute;
+    inset: 0;
+    transform-origin: center center;
+    --sx: 1; --sy: 1; --py: 1;
+    transform: scale(var(--sx), calc(var(--sy) * var(--py)));
+    opacity: 1;
+    filter: brightness(1);
+    /* easeOutBounce — the picture springs to size and settles */
+    transition: transform 310ms linear(
+      0, 0.012, 0.05, 0.112, 0.2, 0.312, 0.45, 0.612 36.4%, 1 45.5%,
+      0.89 50%, 0.812, 0.762, 0.74, 0.748, 0.786, 0.852 68.2%, 1 77.3%,
+      0.952, 0.926, 0.926 86.4%, 0.952, 1 95.5%, 0.988, 1);
+    background: #05060a;
+  }
+
+  /* Unity WebGL canvas fills #game (so it inherits the PVM scale/power transform). */
+  #unity-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+    background: #05060a;
+  }
+  #unity-loading {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+    color: #cfd4da;
+  }
+
+  /* ---- placeholder picture (SMPTE-ish bars). Replace #game contents with Unity canvas ---- */
+  .placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+  }
+  .bars { flex: 1; display: flex; }
+  .bars > div { flex: 1; }
+  .bars .b0 { background: #bfbfbf; }
+  .bars .b1 { background: #c8c800; }
+  .bars .b2 { background: #00c8c8; }
+  .bars .b3 { background: #00c800; }
+  .bars .b4 { background: #c800c8; }
+  .bars .b5 { background: #c80000; }
+  .bars .b6 { background: #0000c8; }
+  .bars-lo { flex: 0 0 26%; display: flex; }
+  .bars-lo > div { flex: 1; }
+  .bars-lo .l0 { background: #00006e; }
+  .bars-lo .l1 { background: #1a1a1a; }
+  .bars-lo .l2 { background: #bfbfbf; }
+  .bars-lo .l3 { background: #1a1a1a; }
+  .ph-label {
+    position: absolute; left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: #000; color: #fff;
+    font-family: "Silkscreen", monospace;
+    font-size: clamp(12px, 2.6vw, 30px);
+    letter-spacing: 1px;
+    padding: 10px 18px;
+    border: 2px solid #fff;
+    white-space: nowrap;
+  }
+  .ph-sub {
+    position: absolute; left: 50%; bottom: 8%;
+    transform: translateX(-50%);
+    color: #cfd4da; background: rgba(0,0,0,0.55);
+    font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 4px 10px;
+  }
+
+  /* ---- CRT OVERLAY: bezel curve + scanlines. SWAP-OUT TARGET. ----
+     To use a real PNG instead, give .crt-overlay a background-image and
+     remove the gradients below. It sits above #game and never eats clicks. */
+  .crt-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    border-radius: 22px / 30px;
+    /* scanlines + subtle aperture grille */
+    background:
+      repeating-linear-gradient(to bottom,
+        rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1px,
+        rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px);
+    box-shadow:
+      /* trims the very edges into the curved tube */
+      0 0 26px 10px rgba(0,0,0,0.55) inset,
+      0 0 0 6px rgba(0,0,0,0.9) inset;
+  }
+  /* glass glare + vignette as separate layer so it reads as a curved tube */
+  .crt-overlay::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    background:
+      radial-gradient(130% 120% at 28% 14%,
+        rgba(255,255,255,0.10) 0%,
+        rgba(255,255,255,0.03) 18%,
+        rgba(255,255,255,0) 42%),
+      radial-gradient(120% 120% at 50% 50%,
+        rgba(0,0,0,0) 58%, rgba(0,0,0,0.45) 100%);
+  }
+
+  /* ---------- fullscreen "PROJECT" mode ---------- */
+  .monitor:fullscreen,
+  .monitor:-webkit-full-screen {
+    width: 100vw; height: 100vh; max-width: none;
+    padding: 0; border-radius: 0;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    aspect-ratio: auto;
+    box-shadow: none;
+  }
+  .monitor:fullscreen .screen,
+  .monitor:-webkit-full-screen .screen {
+    position: relative; inset: auto;
+    width: min(100vw, calc(100vh * 4 / 3));
+    height: auto; aspect-ratio: 4 / 3;
+    border-radius: 0; box-shadow: none;
+  }
+
+  /* ---------- PVM control panel ---------- */
+  .panel {
+    width: var(--mon-w);
+    max-width: calc(100vw - 32px);
+    margin: 16px auto 0;
+    background: linear-gradient(180deg, #2b2e33, #1a1c20);
+    border: 1px solid #000;
+    border-radius: 10px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 10px 30px -16px #000;
+    padding: 16px 22px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .pgroup { display: flex; flex-direction: column; gap: 10px; }
+  .pgroup > .glabel {
+    font-family: "Silkscreen", monospace;
+    font-size: 9px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .pbtns { display: flex; gap: 16px; }
+  .pdiv { width: 1px; align-self: stretch; background: #000; box-shadow: 1px 0 0 rgba(255,255,255,0.05); }
+
+  .pvm-btn {
+    appearance: none;
+    background: none; border: 0; padding: 0; margin: 0;
+    cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    width: 52px;
+  }
+  .led {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--led-off);
+    box-shadow: inset 0 0 2px #000, 0 0 0 1px #000;
+    transition: background 160ms, box-shadow 160ms;
+  }
+  .pvm-btn[aria-pressed="true"] .led,
+  .pvm-btn.on .led {
+    background: var(--led-on);
+    box-shadow: 0 0 7px var(--led-on), inset 0 0 2px #d6ffe6, 0 0 0 1px #0a3b1d;
+  }
+  .cap {
+    width: 38px; height: 28px; border-radius: 5px;
+    background: linear-gradient(180deg, #e2e2dc, #b4b4ac 70%, #9a9a92);
+    border: 1px solid #000;
+    box-shadow: 0 4px 0 #050505, 0 5px 6px -2px rgba(0,0,0,0.6);
+    transition: transform 120ms cubic-bezier(0.34,1.42,0.64,1), box-shadow 120ms;
+  }
+  .pvm-btn:hover .cap { filter: brightness(1.05); }
+  .pvm-btn:active .cap,
+  .pvm-btn[aria-pressed="true"] .cap,
+  .pvm-btn.on .cap {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #050505, 0 2px 3px -1px rgba(0,0,0,0.6);
+    background: linear-gradient(180deg, #cfcfc8, #a6a69e 70%, #8e8e86);
+  }
+  .clabel {
+    font-family: "Silkscreen", monospace;
+    font-size: 8px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--ink-dim); text-align: center; line-height: 1.3;
+  }
+  .panel-readout {
+    margin-left: auto;
+    align-self: center;
+    text-align: right;
+    font-size: 11px; letter-spacing: 1px;
+    color: var(--ink-dim);
+    text-transform: uppercase;
+  }
+  .panel-readout b { color: var(--phos); font-weight: 600; }
+
+  /* ---------- section heading ---------- */
+  .section { margin-top: 64px; }
+  .section > h2 {
+    font-family: "Silkscreen", monospace;
+    font-size: 15px; letter-spacing: 2px; text-transform: uppercase;
+    margin: 0 0 4px; color: var(--ink);
+  }
+  .section > .sub { color: var(--ink-dim); font-size: 13px; margin: 0 0 26px; }
+
+  /* ---------- controls diagram ---------- */
+  .diagram { position: relative; }
+  .wires {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none; z-index: 0;
+    overflow: visible;
+  }
+  .diagram > * { position: relative; z-index: 1; }
+  /* keep the wires layer ABSOLUTE — the rule above would otherwise force it
+     back into flow and feed its height into the diagram in a resize loop */
+  .diagram > svg.wires { position: absolute; inset: 0; z-index: 0; }
+
+  .controller-wrap { display: flex; justify-content: center; }
+  .nespad { position: relative; width: 400px; max-width: 92%; }
+  .nespad img { display: block; width: 100%; height: auto; }
+  .cpad-anchor {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
+    border: 2.5px solid var(--c);
+    box-shadow: 0 0 9px -1px var(--c), inset 0 0 6px -2px var(--c);
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  /* function nodes */
+  .functions {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin: 64px 0;
+  }
+  .fn {
+    --c: var(--ink);
+    background: linear-gradient(180deg, #181b20, #111317);
+    border: 1px solid var(--hair);
+    border-top: 2px solid var(--c);
+    border-radius: 8px;
+    padding: 14px 12px 12px;
+    text-align: center;
+    box-shadow: 0 6px 18px -12px #000;
+  }
+  .fn .fn-name {
+    font-family: "Silkscreen", monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--c);
+    margin-bottom: 7px;
+  }
+  .fn .fn-desc { font-size: 12px; color: var(--ink); line-height: 1.35; }
+  .fn .fn-keys {
+    margin-top: 9px;
+    font-size: 11px; color: var(--ink-dim);
+    display: flex; gap: 5px; justify-content: center; flex-wrap: wrap;
+  }
+  .fn .fn-keys kbd {
+    font-family: "IBM Plex Mono", monospace;
+    background: #0c0e11; border: 1px solid #2a2f36; border-bottom-width: 2px;
+    border-radius: 4px; padding: 1px 6px; color: var(--ink);
+    font-size: 11px;
+  }
+
+  /* keyboard */
+  .keyboard-wrap { display: flex; justify-content: center; }
+  .keyboard {
+    background: linear-gradient(180deg, #2a2d32, #16181c);
+    border: 1px solid #000;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 18px 40px -22px #000;
+    display: flex; gap: 16px; align-items: flex-end;
+  }
+  .kb-main { display: flex; flex-direction: column; gap: 6px; }
+  .krow { display: flex; gap: 6px; }
+  .key {
+    height: 34px;
+    min-width: 34px;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #3a3e44, #24272c);
+    border: 1px solid #000;
+    box-shadow: 0 2px 0 #000, 0 1px 0 rgba(255,255,255,0.06) inset;
+    color: var(--ink-dim);
+    font-size: 11px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    padding: 0 7px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .key.wide { min-width: 56px; }
+  .key.wider { min-width: 74px; }
+  .key.tab { min-width: 52px; }
+  .key.caps { min-width: 62px; }
+  .key.shift { min-width: 86px; }
+  .key.enter { min-width: 78px; }
+  .key.space { min-width: 240px; flex: 1; }
+  .key .sub {
+    position: absolute; top: 3px; left: 6px;
+    font-size: 9px; color: var(--ink-faint);
+  }
+  .key.hl {
+    color: #0b0d10;
+    background: linear-gradient(180deg, var(--c), color-mix(in oklab, var(--c), #000 28%));
+    border-color: #000;
+    box-shadow: 0 0 12px -1px var(--c), 0 2px 0 #000;
+    font-weight: 700;
+  }
+  .key.hl .sub { color: rgba(0,0,0,0.55); }
+  /* a key that serves two functions (‘;’ = attack-right, ‘:’ = attack-left) */
+  .key.hl.dual {
+    background: linear-gradient(90deg,
+      var(--c2) 0 50%, var(--c) 50% 100%);
+    box-shadow: -6px 0 12px -4px var(--c2), 6px 0 12px -4px var(--c), 0 2px 0 #000;
+  }
+  .key.hl.dual .sub { color: rgba(0,0,0,0.6); }
+  .kb-arrows { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .kb-arrows .krow { justify-content: center; }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+    margin-top: 22px; font-size: 11px; color: var(--ink-dim);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+
+  /* ---------- hints ---------- */
+  .hints { display: flex; flex-direction: column; gap: 12px; }
+  details.hint {
+    background: linear-gradient(180deg, #15181c, #101216);
+    border: 1px solid var(--hair);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  details.hint > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 15px 18px;
+    display: flex; align-items: center; gap: 12px;
+    font-family: "Silkscreen", monospace;
+    font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--ink);
+    user-select: none;
+  }
+  details.hint > summary::-webkit-details-marker { display: none; }
+  .hint .tags { display: flex; gap: 5px; }
+  .hint .tag {
+    font-family: "Silkscreen", monospace;
+    font-size: 8px; letter-spacing: 1px;
+    color: #0b0d10; background: var(--fn-atkR);
+    padding: 3px 6px; border-radius: 3px;
+  }
+  .hint .chev {
+    margin-left: auto;
+    color: var(--ink-dim);
+    transition: transform 200ms cubic-bezier(0.34,1.42,0.64,1);
+    font-family: "IBM Plex Mono", monospace;
+  }
+  details.hint[open] > summary .chev { transform: rotate(90deg); color: var(--phos); }
+  .hint-body {
+    padding: 2px 18px 18px;
+    color: var(--ink);
+    font-size: 14px;
+    border-top: 1px solid var(--hair);
+  }
+  .hint-body p { margin: 14px 0 0; color: var(--ink-dim); }
+  .hint-body .spoiler {
+    background: #000; color: #000; border-radius: 3px;
+    transition: color 120ms;
+  }
+  .hint-body .spoiler:hover { color: var(--ink); }
+
+  footer {
+    margin-top: 70px;
+    border-top: 1px solid var(--hair);
+    padding-top: 18px;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===================== MONITOR ===================== -->
+  <div class="monitor-band">
+    <div class="monitor" id="monitor">
+      <div class="screen">
+        <div id="game">
+          <canvas id="unity-canvas" width="960" height="720" tabindex="-1"></canvas>
+          <div id="unity-loading">Loading&hellip;</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CONTROL PANEL ===================== -->
+  <div class="panel" id="panel">
+    <div class="pgroup">
+      <span class="glabel">Output</span>
+      <div class="pbtns">
+        <button class="pvm-btn" id="project-btn"><span class="led"></span><span class="cap"></span><span class="clabel">Project</span></button>
+      </div>
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="pgroup">
+      <span class="glabel">Scan</span>
+      <div class="pbtns" id="scan-group">
+        <button class="pvm-btn" data-scan="under"><span class="led"></span><span class="cap"></span><span class="clabel">Under<br />Scan</span></button>
+        <button class="pvm-btn" data-scan="over"><span class="led"></span><span class="cap"></span><span class="clabel">Over<br />Scan</span></button>
+      </div>
+    </div>
+
+    <div class="pdiv"></div>
+
+    <div class="pgroup">
+      <span class="glabel">Geometry</span>
+      <div class="pbtns">
+        <button class="pvm-btn" id="hsize-btn"><span class="led"></span><span class="cap"></span><span class="clabel">H<br />Size</span></button>
+      </div>
+    </div>
+
+    <div class="pgroup" style="margin-left:auto;">
+      <span class="glabel">Power</span>
+      <div class="pbtns">
+        <button class="pvm-btn on" id="power-btn"><span class="led"></span><span class="cap"></span><span class="clabel">Power</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== CONTROLS DIAGRAM ===================== -->
+  <div class="col section">
+    <h2>Controls</h2>
+    <p class="sub">NES pad mappings, and the equivalent keys for PC players.</p>
+
+    <div class="diagram" id="diagram">
+      <svg class="wires" id="wires" aria-hidden="true"></svg>
+
+      <!-- NES CONTROLLER (photo) -->
+      <div class="controller-wrap">
+        <div class="nespad" id="nespad">
+          <img src="assets/nes-pad.png" alt="NES controller" />
+          <span class="cpad-anchor" id="c-dpad"   style="--c:var(--fn-move);  left:18.2%; top:51.5%; width:23%;"></span>
+          <span class="cpad-anchor" id="c-select" style="--c:var(--fn-music); left:44.2%; top:69%;   width:8.5%;"></span>
+          <span class="cpad-anchor" id="c-start"  style="--c:var(--fn-start); left:55.4%; top:69%;   width:8.5%;"></span>
+          <span class="cpad-anchor" id="c-b"      style="--c:var(--fn-atkL);  left:73%;   top:67.5%; width:12.5%;"></span>
+          <span class="cpad-anchor" id="c-a"      style="--c:var(--fn-atkR);  left:87.4%; top:67.5%; width:12.5%;"></span>
+        </div>
+      </div>
+
+      <!-- FUNCTION NODES -->
+      <div class="functions" id="functions">
+        <div class="fn" id="f-move" style="--c: var(--fn-move)">
+          <div class="fn-name">Move</div>
+          <div class="fn-desc">D-pad Left / Right walks your character.</div>
+          <div class="fn-keys"><kbd>A</kbd><kbd>D</kbd><kbd>←</kbd><kbd>→</kbd></div>
+        </div>
+        <div class="fn" id="f-atkL" style="--c: var(--fn-atkL)">
+          <div class="fn-name">Attack Left</div>
+          <div class="fn-desc"><b>B</b> swings to the left.</div>
+          <div class="fn-keys"><kbd>&lt;</kbd><kbd>L</kbd></div>
+        </div>
+        <div class="fn" id="f-atkR" style="--c: var(--fn-atkR)">
+          <div class="fn-name">Attack Right</div>
+          <div class="fn-desc"><b>A</b> swings to the right.</div>
+          <div class="fn-keys"><kbd>&gt;</kbd><kbd>;</kbd></div>
+        </div>
+        <div class="fn" id="f-music" style="--c: var(--fn-music)">
+          <div class="fn-name">Music</div>
+          <div class="fn-desc"><b>Select</b> changes the music track.</div>
+          <div class="fn-keys"><kbd>Space</kbd></div>
+        </div>
+        <div class="fn" id="f-start" style="--c: var(--fn-start)">
+          <div class="fn-name">Start / Pause</div>
+          <div class="fn-desc"><b>Start</b> begins &amp; pauses play.</div>
+          <div class="fn-keys"><kbd>Enter</kbd></div>
+        </div>
+      </div>
+
+      <!-- KEYBOARD (built by JS) -->
+      <div class="keyboard-wrap">
+        <div class="keyboard" id="keyboard"></div>
+      </div>
+    </div>
+
+    <div class="legend" id="legend">
+      <span><i style="background:var(--fn-move)"></i>Move</span>
+      <span><i style="background:var(--fn-atkL)"></i>Attack Left</span>
+      <span><i style="background:var(--fn-atkR)"></i>Attack Right</span>
+      <span><i style="background:var(--fn-music)"></i>Music</span>
+      <span><i style="background:var(--fn-start)"></i>Start / Pause</span>
+    </div>
+  </div>
+
+  <!-- ===================== HINTS ===================== -->
+  <div class="col section">
+    <h2>Hints &amp; Spoilers</h2>
+    <p class="sub">Stuck? Open a drawer. Heavier spoilers are blacked out — hover to reveal.</p>
+    <div class="hints" id="hints"></div>
+  </div>
+
+  <div class="col">
+    <footer>
+      <span>Curse of the Night Rider</span>
+      <span>Controls &amp; hints — placeholder copy</span>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+
+  <!-- Unity WebGL loader: mounts the build into #unity-canvas, auto-loads with progress -->
+  <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+  <script>
+    var loading = document.querySelector("#unity-loading");
+    createUnityInstance(document.querySelector("#unity-canvas"), {
+      dataUrl: "Build/{{{ DATA_FILENAME }}}",
+      frameworkUrl: "Build/{{{ FRAMEWORK_FILENAME }}}",
+      codeUrl: "Build/{{{ CODE_FILENAME }}}",
 #if MEMORY_FILENAME
-        memoryUrl: "Build/{{{ MEMORY_FILENAME }}}",
+      memoryUrl: "Build/{{{ MEMORY_FILENAME }}}",
 #endif
 #if SYMBOLS_FILENAME
-        symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
+      symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
 #endif
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
-        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
-        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
-      }, function (progress) {
-        loading.textContent = "loading " + Math.round(progress * 100) + "%";
-      }).then(function () {
-        loading.style.display = "none";
-      }).catch(function (e) {
-        loading.textContent = "failed to load — see console";
-        console.error(e);
-      });
-    </script>
-  </body>
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+      productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+      productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+    }, function (progress) {
+      loading.textContent = "Loading " + Math.round(progress * 100) + "%";
+    }).then(function () {
+      loading.style.display = "none";
+    }).catch(function (e) {
+      loading.textContent = "Failed to load — see console";
+      console.error(e);
+    });
+  </script>
+</body>
 </html>
