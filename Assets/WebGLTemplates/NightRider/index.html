@@ -663,6 +663,9 @@
       symbolsUrl: "Build/{{{ SYMBOLS_FILENAME }}}",
 #endif
       streamingAssetsUrl: "StreamingAssets",
+      // Keep the framebuffer at the canvas's 960x720 attributes and DON'T re-fit it
+      // to the displayed size — so the PVM transforms (H-Size etc.) scale it visually.
+      matchWebGLToCanvasSize: false,
       companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
       productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
       productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},

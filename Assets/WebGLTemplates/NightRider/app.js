@@ -40,14 +40,15 @@
   function resizeTween() { game.style.transition = ""; }   /* fall back to CSS bounce */
 
   function apply() {
-    /* scan + h-size scale */
+    /* horizontal = scan x h-size;  vertical = scan x power-collapse.
+       Set the transform string directly — a bare var() first arg mixed with a
+       calc() second arg in scale() didn't apply the X scale reliably. */
     var s = state.scan === "under" ? UNDER : state.scan === "over" ? OVER : 1;
     var sx = s * (state.hsize ? HSIZE : 1);
-    game.style.setProperty("--sx", sx.toFixed(4));
-    game.style.setProperty("--sy", s.toFixed(4));
+    var sy = s * (state.power ? 1 : 0.006);
+    game.style.transform = "scale(" + sx.toFixed(4) + ", " + sy.toFixed(4) + ")";
 
     /* power: CRT shut-off — collapse height to a line + fade brightness/alpha */
-    game.style.setProperty("--py", state.power ? "1" : "0.006");
     game.style.opacity = state.power ? "1" : "0";
     game.style.filter = state.power ? "brightness(1)" : "brightness(1.9)";
     document.getElementById("power-btn").classList.toggle("on", state.power);
