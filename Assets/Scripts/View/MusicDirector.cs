@@ -37,6 +37,8 @@ namespace NightRider.View
 
         [Tooltip("Plays when no head is selected (the default — never lost).")]
         public AudioClip defaultTrack;
+        [Tooltip("Head shown in the HUD on the no-head (default) slot, in place of the empty square.")]
+        public Texture2D defaultHead;
         [Range(0f, 1f)] public float volume = 0.6f;
 
         AudioSource _src;
@@ -46,18 +48,19 @@ namespace NightRider.View
 
         public TradingPost CurrentHead => (_index < 0 || _index >= _heads.Count) ? null : _heads[_index];
 
-        // 32x32 head sprite for the HUD (null while on the default slot).
+        // 32x32 head sprite for the HUD: the collected head, or the default-head image
+        // on the no-head slot (null only if neither is assigned).
         public Sprite CurrentHeadSprite
         {
             get
             {
                 var h = CurrentHead;
-                if (h == null || h.headImage == null) return null;
-                if (!_spriteCache.TryGetValue(h.headImage, out var sp))
+                Texture2D tex = h != null ? h.headImage : defaultHead;
+                if (tex == null) return null;
+                if (!_spriteCache.TryGetValue(tex, out var sp))
                 {
-                    var t = h.headImage;
-                    sp = Sprite.Create(t, new Rect(0, 0, t.width, t.height), new Vector2(0.5f, 0.5f), 100f);
-                    _spriteCache[h.headImage] = sp;
+                    sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+                    _spriteCache[tex] = sp;
                 }
                 return sp;
             }
