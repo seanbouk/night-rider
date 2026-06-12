@@ -21,6 +21,8 @@ namespace NightRider.View
 
         [Range(0, 64), Tooltip("Pixels with every channel at/below this (0-255) become transparent — keys out a black background.")]
         public int blackCutoff = 8;
+        [Tooltip("Snap each (non-keyed) icon pixel to the nearest NES-legal colour.")]
+        public bool snapToNes = true;
 
         readonly Dictionary<Texture2D, Sprite> _cache = new();
 
@@ -66,7 +68,12 @@ namespace NightRider.View
             for (int i = 0; i < px.Length; i++)
             {
                 var c = px[i];
-                if (c.r <= cut && c.g <= cut && c.b <= cut) c.a = 0;
+                if (c.r <= cut && c.g <= cut && c.b <= cut) c.a = 0;   // key black out
+                else if (snapToNes)
+                {
+                    var s = (Color32)Nes.Snap(new Color(c.r / 255f, c.g / 255f, c.b / 255f));
+                    c.r = s.r; c.g = s.g; c.b = s.b;                   // keep alpha
+                }
                 px[i] = c;
             }
 

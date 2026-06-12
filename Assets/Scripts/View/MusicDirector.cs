@@ -39,6 +39,8 @@ namespace NightRider.View
         public AudioClip defaultTrack;
         [Tooltip("Head shown in the HUD on the no-head (default) slot, in place of the empty square.")]
         public Texture2D defaultHead;
+        [Tooltip("Snap head pixels to the nearest NES-legal colour (needs Read/Write on the head textures).")]
+        public bool snapToNes = true;
         [Range(0f, 1f)] public float volume = 0.6f;
 
         AudioSource _src;
@@ -59,8 +61,9 @@ namespace NightRider.View
                 if (tex == null) return null;
                 if (!_spriteCache.TryGetValue(tex, out var sp))
                 {
-                    sp = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
-                    _spriteCache[tex] = sp;
+                    var src = snapToNes ? Nes.SnapTexture(tex) : tex;
+                    sp = Sprite.Create(src, new Rect(0, 0, src.width, src.height), new Vector2(0.5f, 0.5f), 100f);
+                    _spriteCache[tex] = sp;   // cache keyed by the original texture
                 }
                 return sp;
             }
