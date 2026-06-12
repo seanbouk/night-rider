@@ -3,6 +3,7 @@
 // runtime, so nothing needs to be added to the scene.
 //
 // Keyboard:  arrows / WASD = directions;  >  = A;  <  = B;  Enter = Start;  Space = Select.
+//            L = attack left;  ; = attack right (gameplay attack only — not A/B).
 // Joypad:    left stick + d-pad (hat) = directions;  South/East = A;  West/North = B;
 //            Start button = Start;  Select button = Select.
 //
@@ -20,6 +21,7 @@ namespace NightRider.World
     public class Controls : MonoBehaviour
     {
         public static bool Left, Right, Up, Down, A, B, Start, Select;
+        public static bool AttackLeft, AttackRight;   // keyboard L / ; — gameplay attack
 
         const float Dead = 0.5f;
         Vector2 _prevStick;
@@ -51,6 +53,9 @@ namespace NightRider.World
             B      = Hit(kb?.commaKey)  || Hit(gp?.buttonNorth) || Hit(gp?.buttonSouth);
             Start  = Hit(kb?.enterKey)  || Hit(kb?.numpadEnterKey) || Hit(gp?.startButton);
             Select = Hit(kb?.spaceKey)  || Hit(gp?.selectButton);
+
+            AttackLeft  = Hit(kb?.lKey);
+            AttackRight = Hit(kb?.semicolonKey);
         }
 
         // A KeyControl is a ButtonControl, so this covers keys, d-pad, and buttons.

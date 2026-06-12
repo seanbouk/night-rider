@@ -145,8 +145,8 @@ namespace NightRider.World
         // < attacks the lane to the left, > the lane to the right.
         void HandleAttack()
         {
-            if (Controls.B) Attack(-1);        // B / < = attack left
-            else if (Controls.A) Attack(+1);   // A / > = attack right
+            if (Controls.B || Controls.AttackLeft) Attack(-1);         // B / < or L = attack left
+            else if (Controls.A || Controls.AttackRight) Attack(+1);   // A / > or ; = attack right
         }
 
         void Attack(int side)
