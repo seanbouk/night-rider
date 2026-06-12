@@ -194,7 +194,9 @@ namespace NightRider.View
             if (_uiRT != null && _uiRT.width == w && _uiRT.height == h) return;
 
             if (_uiRT != null) { _uiCam.targetTexture = null; _uiRT.Release(); Destroy(_uiRT); }
-            _uiRT = new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32)
+            // 24-bit depth/stencil: URP's render graph requires a camera-output RT to
+            // have a depth buffer (and UGUI masks can use the stencil).
+            _uiRT = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32)
             {
                 name = "UITex",
                 filterMode = FilterMode.Point,   // crisp 1:1 when the CRT samples it

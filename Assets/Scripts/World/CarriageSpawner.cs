@@ -1,10 +1,14 @@
-// Spawns carriages ahead of the rider in its current and adjacent lanes, and
-// culls them once they fall behind the camera. Spawning is rider-relative (a
-// fixed distance ahead on a chosen lane), so density stays steady on long lanes
-// and we never spawn oncoming traffic (adjacency is same-direction only).
+// Director-driven carriage traffic. Instead of a fixed-rate "pick a random side and
+// maybe bail" loop (which thinned out on single-lane stretches and near posts), a
+// DIRECTOR schedules the next carriage for some random time N..M from now. When it
+// fires it looks at the lanes the rider can currently be on (current + reachable
+// same-direction neighbours), drops any lane with a VISIBLE trading post ahead, and
+// spawns one carriage a set distance ahead on a random remaining lane. If no lane is
+// suitable it just skips and reschedules — so cadence stays even regardless of lane
+// length or straights, and the road near a post stays clear.
 //
-// Visual: a carriage sprite (cols x rows sheet) — random colour row, side-based
-// column. Falls back to a capsule if no sheet is assigned.
+// Carriages are culled once they fall behind the camera. Visual: a carriage sprite
+// (cols x rows sheet) — random colour row, side-based column; capsule fallback.
 
 using System.Collections.Generic;
 using UnityEngine;
@@ -20,17 +24,25 @@ namespace NightRider.World
         [Tooltip("Viewpoint for despawn-behind. Defaults to main camera.")]
         public Transform view;
 
-        [Header("Population")]
+        [Header("Director")]
         [Min(0)] public int maxCarriages = 8;
+        [Min(0.05f), Tooltip("Shortest wait before the next carriage (seconds).")]
+        public float minInterval = 1.5f;
+        [Min(0.05f), Tooltip("Longest wait before the next carriage (seconds).")]
+        public float maxInterval = 3.5f;
+        [Min(0), Tooltip("Carriages to pre-seed across the road ahead at start (avoids a barren opening).")]
+        public int seedCount = 4;
+
+        [Header("Placement")]
         [Min(1f), Tooltip("How far ahead of the rider (along the lane) to spawn.")]
         public float spawnAhead = 50f;
+        [Min(0f), Tooltip("Random +/- variation on the spawn distance, so they don't all appear at the same range.")]
+        public float spawnAheadJitter = 12f;
         [Min(0f), Tooltip("Distance behind the camera at which to cull a carriage.")]
         public float despawnBehind = 25f;
-        [Min(0.05f), Tooltip("Seconds between spawn attempts.")]
-        public float spawnInterval = 0.4f;
         [Min(0f), Tooltip("Don't spawn within this distance of existing traffic.")]
         public float occupyClearance = 6f;
-        [Min(0f), Tooltip("Keep trading-post approaches clear: while a post is within this distance ahead on a lane, spawn NOTHING on that lane (whole lane, not just the gap) until the rider passes it. 0 = off.")]
+        [Min(0f), Tooltip("A lane is skipped while a trading post is within this distance ahead on it (keeps post approaches clear). 0 = off.")]
         public float postApproachClear = 100f;
 
         [Header("Carriage")]
@@ -61,7 +73,9 @@ namespace NightRider.World
         };
 
         readonly List<Carriage> _spawned = new();
-        float _timer;
+        readonly List<(Lane lane, float baseT)> _cands = new();
+        float _nextSpawn;
+        bool _seeded;
         Material _nesMat;   // shared NesSprite material; per-row colours come from a property block
 
         Material NesMat()
@@ -79,6 +93,8 @@ namespace NightRider.World
         {
             if (view == null && Camera.main != null) view = Camera.main.transform;
             if (network == null) network = FindAnyObjectByType<LaneNetwork>();
+            _seeded = false;
+            ScheduleNext();
         }
 
         void Update()
@@ -87,13 +103,20 @@ namespace NightRider.World
 
             Despawn();
 
-            _timer += Time.deltaTime;
-            if (_timer >= spawnInterval && _spawned.Count < maxCarriages)
+            if (!_seeded && rider.lane != null && rider.lane.IsValid)
             {
-                _timer = 0f;
-                TrySpawn();
+                _seeded = true;
+                Seed();
+            }
+
+            if (Time.time >= _nextSpawn)
+            {
+                ScheduleNext();
+                if (_spawned.Count < maxCarriages) TrySpawnOne();
             }
         }
+
+        void ScheduleNext() => _nextSpawn = Time.time + Random.Range(minInterval, Mathf.Max(minInterval, maxInterval));
 
         void Despawn()
         {
@@ -111,46 +134,73 @@ namespace NightRider.World
             }
         }
 
-        void TrySpawn()
+        // The lanes the rider can currently be on (current + reachable neighbours),
+        // minus any with a visible post ahead. Each candidate carries the lane's t at
+        // the rider's position, so spawnAhead is measured from there.
+        void GatherCandidates()
         {
+            _cands.Clear();
             var here = rider.lane;
             if (here == null || !here.IsValid) return;
 
-            // Pick the current lane (0) or a neighbour (-1 / +1).
-            int side = Random.Range(0, 3) - 1;
-            Lane lane;
-            float baseT;
-            if (side == 0)
+            if (!PostAhead(here, rider.t)) _cands.Add((here, rider.t));
+
+            here.EvaluateWorld(rider.t, out var rpos, out _, out _);
+            for (int side = -1; side <= 1; side += 2)
             {
-                lane = here;
-                baseT = rider.t;
+                if (network == null || !network.TryGetNeighbor(here, rider.t, side, out var nb) || nb == null || !nb.IsValid)
+                    continue;
+                float baseT = nb.ProjectWorldPoint(rpos, out _);
+                if (!PostAhead(nb, baseT)) _cands.Add((nb, baseT));
             }
-            else
-            {
-                if (network == null || !network.TryGetNeighbor(here, rider.t, side, out lane) || lane == null || !lane.IsValid)
-                    return;
-                here.EvaluateWorld(rider.t, out var rpos, out _, out _);
-                baseT = lane.ProjectWorldPoint(rpos, out _);
-            }
-
-            float len = lane.Length;
-            if (len < 0.0001f) return;
-
-            float t = baseT + spawnAhead / len;
-            if (lane.Closed) t -= Mathf.Floor(t);
-            else if (t > 1f) return;
-
-            if (Carriage.Occupied(lane, t, occupyClearance)) return;
-            if (PostAhead(lane, baseT)) return;   // a post is coming up on this lane — keep it empty
-
-            Spawn(lane, t);
         }
 
-        // True if a trading post is coming up on this lane: within postApproachClear
-        // ahead of the rider and not yet passed. While so, we spawn NOTHING on the
-        // lane (the whole lane, not just the gap before the post), so the approach
-        // stays clutter-free; once the rider passes the post it wraps behind and
-        // spawning resumes.
+        // One carriage on a random suitable lane, a (jittered) distance ahead. Tries
+        // the candidates in random order and takes the first clear spot; skips if none.
+        void TrySpawnOne()
+        {
+            GatherCandidates();
+            if (_cands.Count == 0) return;
+
+            int start = Random.Range(0, _cands.Count);
+            for (int k = 0; k < _cands.Count; k++)
+            {
+                var (lane, baseT) = _cands[(start + k) % _cands.Count];
+                if (TrySpawnAhead(lane, baseT, spawnAhead + Random.Range(-spawnAheadJitter, spawnAheadJitter))) return;
+            }
+        }
+
+        // Pre-seed the visible road so the opening isn't empty: a spread of carriages
+        // from near the rider out to spawnAhead, on whatever lanes are suitable.
+        void Seed()
+        {
+            for (int i = 0; i < seedCount && _spawned.Count < maxCarriages; i++)
+            {
+                GatherCandidates();
+                if (_cands.Count == 0) break;
+                var (lane, baseT) = _cands[Random.Range(0, _cands.Count)];
+                float ahead = Mathf.Lerp(spawnAhead * 0.25f, spawnAhead, (i + 0.5f) / Mathf.Max(1, seedCount));
+                TrySpawnAhead(lane, baseT, ahead + Random.Range(-spawnAheadJitter, spawnAheadJitter));
+            }
+        }
+
+        bool TrySpawnAhead(Lane lane, float baseT, float ahead)
+        {
+            float len = lane.Length;
+            if (len < 0.0001f) return false;
+
+            float t = baseT + ahead / len;
+            if (lane.Closed) t -= Mathf.Floor(t);
+            else if (t < 0f || t > 1f) return false;
+
+            if (Carriage.Occupied(lane, t, occupyClearance)) return false;
+
+            Spawn(lane, t);
+            return true;
+        }
+
+        // True if a trading post is within postApproachClear ahead on this lane (so we
+        // keep the whole lane clear until the rider passes it).
         bool PostAhead(Lane lane, float baseT)
         {
             if (postApproachClear <= 0f) return false;
