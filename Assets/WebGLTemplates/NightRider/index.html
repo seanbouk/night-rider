@@ -108,30 +108,31 @@
   }
 
   .monitor {
-    width: var(--mon-w);
+    width: var(--col);                 /* 960 = column width (glass + bezel both fill it) */
     max-width: calc(100vw - 32px);
     aspect-ratio: 4 / 3;
     position: relative;
-    transition: width 240ms cubic-bezier(0.34, 1.42, 0.64, 1);
-    /* housing */
-    padding: 2.4%;
     border-radius: 14px;
-    background:
-      linear-gradient(180deg, var(--metal-1), var(--metal-2) 60%, var(--metal-3));
-    box-shadow:
-      0 1px 0 rgba(255,255,255,0.06) inset,
-      0 -24px 40px rgba(0,0,0,0.5) inset,
-      0 30px 60px -20px rgba(0,0,0,0.8);
+    overflow: hidden;                  /* round the glass + bezel corners */
+    background: #000;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8);
+  }
+  /* metal bezel as an OVERLAY that covers the outer edge of the 960x720 glass */
+  .monitor::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    border: 22px solid transparent;
+    border-image: linear-gradient(180deg, var(--metal-1), var(--metal-2) 60%, var(--metal-3)) 1;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 22px 8px rgba(0,0,0,0.5);
   }
 
   /* the glass / picture tube */
   .screen {
     position: absolute;
-    inset: 2.4%;
-    border-radius: 8px;   /* bezel opening — the CRT "glass" look comes from the in-engine renderer */
+    inset: 0;            /* glass fills the 960x720 monitor; the bezel ::after covers its edge */
     overflow: hidden;
     background: #000;
-    box-shadow: 0 0 0 3px #000, 0 0 0 5px #2a2d31;
   }
 
   /* the actual game viewport (Unity WebGL mounts inside #game) */
