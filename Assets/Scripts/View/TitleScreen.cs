@@ -25,6 +25,8 @@ namespace NightRider.View
         public Texture2D titleImage;
         [Range(0.2f, 1f), Tooltip("Fraction of the 4:3 area the image fills (aspect preserved; black around it).")]
         public float imageScale = 1f;
+        [Tooltip("Snap the title image to NES-legal colours (needs Read/Write on the texture).")]
+        public bool snapToNes = true;
 
         [Header("Music")]
         [Tooltip("Track that loops on the title screen (stops for the black, then the game's default plays).")]
@@ -88,8 +90,9 @@ namespace NightRider.View
             {
                 _art = UiCanvas.MakeImage(_ui.TitleFrame, Color.white);
                 _art.name = "TitleArt";
-                _art.sprite = Sprite.Create(titleImage,
-                    new Rect(0, 0, titleImage.width, titleImage.height),
+                var tex = snapToNes ? Nes.SnapTexture(titleImage) : titleImage;
+                _art.sprite = Sprite.Create(tex,
+                    new Rect(0, 0, tex.width, tex.height),
                     new Vector2(0.5f, 0.5f), 100f);
                 _art.preserveAspect = true;
                 float m = (1f - Mathf.Clamp01(imageScale)) * 0.5f;

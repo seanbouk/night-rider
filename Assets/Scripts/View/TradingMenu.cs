@@ -42,6 +42,16 @@ namespace NightRider.View
 
         const int CCursor = 3, CEmoji = 5, CName = 7, COwned = 14, CBuy = 19, CSell = 24, CDelta = 31;
 
+        // Snap the menu palette to NES-legal once.
+        void Awake()
+        {
+            text      = Nes.SnapKeepAlpha(text);
+            dim       = Nes.SnapKeepAlpha(dim);
+            good      = Nes.SnapKeepAlpha(good);
+            bad       = Nes.SnapKeepAlpha(bad);
+            highlight = Nes.SnapKeepAlpha(highlight);
+        }
+
         public void Open(TradingPost post)
         {
             if (player == null) player = FindAnyObjectByType<PlayerState>();

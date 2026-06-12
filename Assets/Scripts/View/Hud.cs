@@ -56,6 +56,17 @@ namespace NightRider.View
         Image _headView;
         bool _paused;
 
+        // Snap the HUD palette to NES-legal once (these UI colours aren't snapped
+        // anywhere else; keep alpha so the faint head-fill stays faint).
+        void Awake()
+        {
+            hudText       = Nes.SnapKeepAlpha(hudText);
+            goldColor     = Nes.SnapKeepAlpha(goldColor);
+            hudStripColor = Nes.SnapKeepAlpha(hudStripColor);
+            headFill      = Nes.SnapKeepAlpha(headFill);
+            pauseBack     = Nes.SnapKeepAlpha(pauseBack);
+        }
+
         // ----------------------------------------------------------- sim / input
 
         void Update()

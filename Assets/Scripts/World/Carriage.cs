@@ -43,6 +43,12 @@ namespace NightRider.World
         bool _destroyed;
         Renderer _renderer;
 
+        void Awake()
+        {
+            barBack = Nes.SnapKeepAlpha(barBack);   // keep alpha (bars are translucent)
+            barFill = Nes.SnapKeepAlpha(barFill);
+        }
+
         void OnEnable()  { if (!All.Contains(this)) All.Add(this); CurrentSpeed = idealSpeed; _renderer = GetComponentInChildren<Renderer>(); }
         void OnDisable()
         {

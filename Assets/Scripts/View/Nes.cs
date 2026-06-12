@@ -48,6 +48,14 @@ namespace NightRider.View
         // NES sprites have no variable alpha.
         public static Color Snap(Color c) => SnapVivid(c, 0f);
 
+        // Nearest NES colour, keeping the input alpha (for UI colours that fade).
+        public static Color SnapKeepAlpha(Color c)
+        {
+            var s = Snap(c);
+            s.a = c.a;
+            return s;
+        }
+
         // Like Snap, but biased toward brighter / more saturated NES colours so dark
         // saturated picks (e.g. a dark green or blue) jump to a vivid NES entry of
         // roughly the same hue instead of the geometrically-nearest drab one.
