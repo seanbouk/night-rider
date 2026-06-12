@@ -2,7 +2,8 @@
 // UiCanvas (so the CRT pass covers it). Opened by a TradingPost; it pauses the
 // game (Time.timeScale = 0). Keyboard-only, mapping to a joypad:
 //   Up/Down (W/S)    - select item
-//   Left/Right (A/D) - sell (-) / buy (+) the selected item (arrows hint this)
+//   Left/Right (A/D) - sell (-) / buy (+) the selected item (arrows hint this);
+//                      the first sell-press from zero dumps the whole stack
 //   >  (A button)    - TRADE
 //   <  (B button)    - EXIT
 //
@@ -81,7 +82,10 @@ namespace NightRider.View
         {
             var it = player.items[_sel];
             int prev = _delta[_sel];
-            int d = prev + dir;
+
+            // First sell-press from zero dumps the whole stack (quick "sell all");
+            // press buy to dial it back. Heads aren't sellable.
+            int d = (dir < 0 && prev == 0 && it.type != ItemType.Heads) ? -it.count : prev + dir;
 
             if (it.type == ItemType.Heads)
             {
