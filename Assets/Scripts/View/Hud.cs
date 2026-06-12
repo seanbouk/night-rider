@@ -39,8 +39,8 @@ namespace NightRider.View
         public float pickupRiseCells = 2f;
         [Tooltip("Blink half-period (seconds).")]
         public float pickupBlink = 0.12f;
-        [Tooltip("Pickup token size, in grid cells. (Colour comes from the item.)")]
-        public float pickupSizeCells = 1.5f;
+        [Tooltip("Pickup token size in whole grid cells (floored to keep pixels crisp; 1 = native icon size, matches the HUD icons).")]
+        public float pickupSizeCells = 1f;
 
         [Header("Layout")]
         [Tooltip("Overscan-unsafe rows at the very bottom (content sits above them).")]
@@ -248,7 +248,9 @@ namespace NightRider.View
                     Mathf.Round(local.x / px) * px,
                     Mathf.Round((local.y + rise) / px) * px);
 
-                float sizeNes = Mathf.Round(pickupSizeCells * 8f);   // whole NES px
+                // Whole cells -> integer icon scale (crisp); 1 cell matches the HUD icons.
+                int cells = Mathf.Max(1, Mathf.FloorToInt(pickupSizeCells));
+                float sizeNes = cells * 8f;
                 v.rectTransform.sizeDelta = new Vector2(sizeNes * px, sizeNes * px);
 
                 var sp = icons != null ? icons.Of(p.type) : null;

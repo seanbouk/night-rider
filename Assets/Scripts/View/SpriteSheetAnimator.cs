@@ -62,8 +62,12 @@ namespace NightRider.View
         {
             if (sheet == null || frames < 1) return;
             _sprites = new Sprite[frames];
-            float w = sheet.width / (float)frames;
-            float h = sheet.height;
+            // Whole-pixel frame width: a float width overflows the texture bounds when
+            // sheet.width isn't an exact multiple of frames (Sprite.Create then throws,
+            // which kills Awake and leaves the capsule showing). Integer division keeps
+            // every rect inside the texture.
+            int w = Mathf.Max(1, sheet.width / frames);
+            int h = sheet.height;
             for (int i = 0; i < frames; i++)
                 _sprites[i] = Sprite.Create(sheet, new Rect(i * w, 0f, w, h), pivot, pixelsPerUnit);
             _sr.sprite = _sprites[0];

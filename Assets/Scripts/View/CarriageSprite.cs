@@ -97,8 +97,10 @@ namespace NightRider.View
         {
             if (sheet == null) return;
             _sprites = new Sprite[rows * cols];
-            float w = sheet.width / (float)cols;
-            float h = sheet.height / (float)rows;
+            // Whole-pixel cells: float widths overflow the texture bounds when the
+            // sheet isn't an exact multiple of cols/rows (Sprite.Create throws).
+            int w = Mathf.Max(1, sheet.width / cols);
+            int h = Mathf.Max(1, sheet.height / rows);
             for (int r = 0; r < rows; r++)
                 for (int c = 0; c < cols; c++)
                     // row 0 = top of the image (texture y is bottom-up)
