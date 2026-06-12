@@ -30,6 +30,10 @@ namespace NightRider.View
         [Tooltip("Track that loops on the title screen (stops for the black, then the game's default plays).")]
         public AudioClip titleTrack;
 
+        [Header("Intro voice")]
+        [Tooltip("Voice sample played over the black after the title. The black lasts at least Black Hold AND at least this clip's length.")]
+        public AudioClip voiceClip;
+
         [Header("Font")]
         [Tooltip("UI font — assign the same one the HUD uses.")]
         public Font font;
@@ -62,9 +66,11 @@ namespace NightRider.View
         enum Phase { Title, Black, Done }
         Phase _phase = Phase.Title;
         float _blackTimer;
+        float _blackDuration;
         UiCanvas _ui;
         GlyphGrid _grid;
         Image _art;
+        AudioSource _voice;
 
         void Awake()
         {
@@ -105,6 +111,11 @@ namespace NightRider.View
             _grid = new GlyphGrid(_ui, _ui.TitleFrame, font);
 
             if (titleTrack != null) MusicDirector.Instance.PlayTitle(titleTrack);
+
+            // 2D one-shot source for the intro voice (plays under the black).
+            _voice = gameObject.AddComponent<AudioSource>();
+            _voice.playOnAwake = false;
+            _voice.spatialBlend = 0f;
         }
 
         void Update()
@@ -123,12 +134,21 @@ namespace NightRider.View
                     if (_art != null) _art.enabled = false;
                     _grid.Begin(); _grid.End();   // clear the text -> just the black backdrop
                     MusicDirector.Instance.Silence();   // no music during the black
+
+                    // Play the intro voice; the black lasts at least blackHold and at
+                    // least the clip's length.
+                    _blackDuration = blackHold;
+                    if (voiceClip != null)
+                    {
+                        _voice.PlayOneShot(voiceClip);
+                        _blackDuration = Mathf.Max(blackHold, voiceClip.length);
+                    }
                 }
             }
             else if (_phase == Phase.Black)
             {
                 _blackTimer += Time.unscaledDeltaTime;
-                if (_blackTimer >= blackHold) Finish();
+                if (_blackTimer >= _blackDuration) Finish();
             }
         }
 
