@@ -161,8 +161,8 @@ namespace NightRider.View
 
             Frame       = Make43Frame("Frame", root);
             WorldBars   = MakePanel("WorldBars", Frame);
+            PickupPanel = MakePanel("Pickups", Frame);   // before Hud -> tucks behind the black HUD bar
             HudPanel    = MakePanel("Hud", Frame);
-            PickupPanel = MakePanel("Pickups", Frame);
             PausePanel  = MakePanel("Pause", Frame);
 
             MenuRoot = MakePanel("Menu", root);                  // full-screen, after Frame -> on top

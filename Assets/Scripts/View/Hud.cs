@@ -124,13 +124,16 @@ namespace NightRider.View
                 const int boxW = 4, boxH = 4;
                 int boxCol = (cols - boxW) / 2;            // always horizontally centred
 
-                // Inventory: two compact columns (emoji x ###), left of the box.
+                // Inventory: two compact columns (icon x ###), left of the box.
                 int colA = 5;
                 int colB = boxCol - 7;
                 int itemRow = top + 1;
                 var items = player.items;
-                for (int i = 0; i < 3 && i < items.Count; i++)     DrawCompact(colA, itemRow + i, ItemColors.Of(items[i].type), items[i].count);
-                for (int i = 0; i < 3 && i + 3 < items.Count; i++) DrawCompact(colB, itemRow + i, ItemColors.Of(items[i + 3].type), items[i + 3].count);
+                var icons = ItemIcons.Instance;
+                for (int i = 0; i < 3 && i < items.Count; i++)
+                    DrawCompact(colA, itemRow + i, icons != null ? icons.Of(items[i].type) : null, ItemColors.Of(items[i].type), items[i].count);
+                for (int i = 0; i < 3 && i + 3 < items.Count; i++)
+                    DrawCompact(colB, itemRow + i, icons != null ? icons.Of(items[i + 3].type) : null, ItemColors.Of(items[i + 3].type), items[i + 3].count);
 
                 // Head box, 4x4 (= 32x32px), horizontally centred. Faint when empty;
                 // the current head's image fills it (the default slot shows no head).
@@ -140,7 +143,7 @@ namespace NightRider.View
                 // Right of the box: level then gold (item-style), dropped down.
                 int rightCol = boxCol + boxW + 1;
                 _hud.Run(rightCol, top + 1, player.level, hudText);
-                DrawCompact(rightCol, top + 3, goldColor, player.gold);
+                DrawCompact(rightCol, top + 3, icons != null ? icons.Gold : null, goldColor, player.gold);
             }
             else if (_headView != null) _headView.enabled = false;
             _hud.End();
@@ -169,10 +172,11 @@ namespace NightRider.View
         }
 
         // [icon]  ×  ### (zero-padded to three digits, clamped 0-999) — 5 cells.
-        // Icon is a placeholder full-cell colour square until real 8x8 sprites land.
-        void DrawCompact(int col, int row, Color icon, int count)
+        // Uses the 8x8 icon sprite when available; falls back to a colour square.
+        void DrawCompact(int col, int row, Sprite icon, Color tint, int count)
         {
-            _hud.Fill(col, row, 1, 1, icon);
+            if (icon != null) _hud.Icon(col, row, 1, 1, icon, Color.white);
+            else              _hud.Fill(col, row, 1, 1, tint);
             _hud.Glyph(col + 1, row, "×", hudText);
             _hud.Run(col + 2, row, Mathf.Clamp(count, 0, 999).ToString("D3"), hudText);
         }
@@ -216,11 +220,12 @@ namespace NightRider.View
             while (_pickViews.Count < n)
             {
                 var img = UiCanvas.MakeImage(ui.PickupPanel, Color.white);
-                img.rectTransform.localRotation = Quaternion.Euler(0f, 0f, 45f);   // diamond/gem
                 _pickViews.Add(img);
             }
 
             float cw = ui.CellWidth(ui.Frame), ch = ui.CellHeight(ui.Frame);
+            float px = cw / 8f;                  // screen px per NES pixel (8 NES px / cell)
+            var icons = ItemIcons.Instance;
 
             for (int i = 0; i < _pickViews.Count; i++)
             {
@@ -237,10 +242,18 @@ namespace NightRider.View
                 v.enabled = visible;
                 if (!visible) continue;
 
+                // Snap position to the NES pixel grid (chunky, grid-aligned motion).
                 ui.ScreenToFrame(ui.Frame, new Vector3(p.screen.x, p.screen.y, 0f), out var local);
-                v.rectTransform.anchoredPosition = new Vector2(local.x, local.y + rise);
-                v.rectTransform.sizeDelta = new Vector2(pickupSizeCells * cw, pickupSizeCells * ch);
-                v.color = ItemColors.Of(p.type);
+                v.rectTransform.anchoredPosition = new Vector2(
+                    Mathf.Round(local.x / px) * px,
+                    Mathf.Round((local.y + rise) / px) * px);
+
+                float sizeNes = Mathf.Round(pickupSizeCells * 8f);   // whole NES px
+                v.rectTransform.sizeDelta = new Vector2(sizeNes * px, sizeNes * px);
+
+                var sp = icons != null ? icons.Of(p.type) : null;
+                v.sprite = sp;
+                v.color = sp != null ? Color.white : ItemColors.Of(p.type);
             }
         }
     }

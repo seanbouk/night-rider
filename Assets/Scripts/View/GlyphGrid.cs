@@ -56,7 +56,18 @@ namespace NightRider.View
         {
             var img = NextImage();
             SetCell(img.rectTransform, col, row, wCells, hCells);
+            img.sprite = null;     // pool is shared with Icon(); clear any prior sprite
             img.color = c;
+        }
+
+        // A sprite icon filling the given cells (pooled with the fills). Tint white to
+        // show the icon as-is.
+        public void Icon(int col, int row, int wCells, int hCells, Sprite sprite, Color tint)
+        {
+            var img = NextImage();
+            SetCell(img.rectTransform, col, row, wCells, hCells);
+            img.sprite = sprite;
+            img.color = tint;
         }
 
         // ---- internals ---------------------------------------------------------

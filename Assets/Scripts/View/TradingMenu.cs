@@ -138,6 +138,13 @@ namespace NightRider.View
             return true;
         }
 
+        // Icon cell: the item's sprite when available, else a flat colour square.
+        void DrawItemIcon(int col, int row, Sprite icon, Color fallback)
+        {
+            if (icon != null) _menu.Icon(col, row, 1, 1, icon, Color.white);
+            else _menu.Fill(col, row, 1, 1, fallback);
+        }
+
         // ----------------------------------------------------------- drawing
 
         void LateUpdate()
@@ -162,6 +169,7 @@ namespace NightRider.View
             _menu.Run(CDelta, 5, "TRADE", dim);
 
             var items = player.items;
+            var icons = ItemIcons.Instance;
             for (int i = 0; i < items.Count; i++)
             {
                 int r = 7 + i * 2;
@@ -171,19 +179,20 @@ namespace NightRider.View
                 var it = items[i];
                 int d = _delta[i];
                 bool isHead = it.type == ItemType.Heads;
+                Sprite icon = icons != null ? icons.Of(it.type) : null;
 
                 if (sel) _menu.Glyph(CCursor, r, ">", good);
 
                 // A collected head reads as completed — collecting heads is the goal.
                 if (isHead && MusicDirector.Instance != null && MusicDirector.Instance.Has(_post))
                 {
-                    _menu.Fill(CEmoji, r, 1, 1, good);
+                    DrawItemIcon(CEmoji, r, icon, good);
                     _menu.Run(CName, r, it.name, good);
                     _menu.Run(COwned, r, "COLLECTED", good);
                     continue;
                 }
 
-                _menu.Fill(CEmoji, r, 1, 1, ItemColors.Of(it.type));
+                DrawItemIcon(CEmoji, r, icon, ItemColors.Of(it.type));
                 _menu.Run(CName, r, it.name, text);
                 _menu.Run(COwned, r, "x" + it.count, text);
                 _menu.Run(CBuy, r, _post.BuyPrice(it.type).ToString(), dim);
