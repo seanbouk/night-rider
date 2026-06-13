@@ -312,24 +312,29 @@
      ============================================================ */
   var HINTS = [
     {
-      tag: "HINT", title: "Getting started",
-      body: "Placeholder hint copy goes here. Describe the opening area, what the player should try first, and the basic loop. Keep it spoiler-free.",
-      spoiler: "A blacked-out spoiler line lives here — hover to reveal the actual answer when this section is written."
+      tag: "SPOILER", title: "The Curse",
+      body: "There's a reason a headless rider is so interested in collecting heads.",
+      spoiler: "You're cursed and headless. The heads you trade up for are the road back to being whole again."
     },
     {
-      tag: "HINT", title: "First boss",
-      body: "Placeholder hint copy. Nudge the player toward the mechanic they need to learn without giving the solution away.",
-      spoiler: "Hidden spoiler: the exact pattern / weakness goes here once written."
+      tag: "HINT", title: "Two Ways to Break a Carriage",
+      body: "Bumping works, but it's slow — there's a faster way to put a carriage down, and it only reaches the lane right next to you.",
+      spoiler: "A rear-end does about 0.4 damage (roughly three hits). An attack — B / L to the left, A / ; to the right — throws a ghostly apparition that one-shots a carriage on the adjacent lane within about six units. Pull up alongside, then strike."
     },
     {
-      tag: "SPOILER", title: "Secret area",
-      body: "Placeholder copy describing that a secret exists and roughly where to look.",
-      spoiler: "Full spoiler: step-by-step route to the secret area goes here."
+      tag: "HINT", title: "Trader's Tricks",
+      body: "A few quality-of-life things the menu won't tell you outright.",
+      spoiler: "In a post, the first Sell press on an item dumps the whole stack at once (quick-sell-all). Out on the road, press Select to cycle through the heads you've collected and their tracks. Traffic also thins out near posts, so the approach stays clear."
     },
     {
-      tag: "SPOILER", title: "True ending",
-      body: "Placeholder copy. Set expectations — there is more than one ending.",
-      spoiler: "Full spoiler: the conditions required for the true ending go here."
+      tag: "HINT", title: "The World Is a Price Tag",
+      body: "The colours of the sky, ground and trees aren't just mood — they drift as you travel, and they're telling you something about money.",
+      spoiler: "The world is tinted by local prices. A good is cheap in one colour-zone and dear in another. Buy where it's low, haul it to where the tint has flipped, and sell — minus the trader's ten percent cut."
+    },
+    {
+      tag: "SPOILER", title: "Heads on the Road",
+      body: "Six trading posts are hidden out on the lanes, each guarding a head. Find one and trigger it to trade.",
+      spoiler: "Run into a post, or attack the lane it sits on, to open it. Each head is a synth-pop frontman — OMD, Kraftwerk, New Order, Roxy Music, Yazoo and Eurythmics. Buy one and it swaps your soundtrack to their track and pins their head to your HUD. You can only buy each once, and heads can't be sold back."
     }
   ];
 
