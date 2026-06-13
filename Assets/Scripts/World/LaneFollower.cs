@@ -92,6 +92,17 @@ namespace NightRider.World
             if (network == null) network = FindAnyObjectByType<LaneNetwork>();
         }
 
+        // Snap onto the lane at our start pose immediately. Start() is guaranteed to
+        // run before any Update() this frame, so anything that reads our transform on
+        // frame 0 — notably the carriage spawner's Seed() — sees the rider already on
+        // the lane. Without this the seed can run first, anchor to the authored/default
+        // transform, and scatter the opening carriages far down the lane (stranded on
+        // the horizon at startup).
+        void Start()
+        {
+            if (lane != null && lane.IsValid) Place(0f);
+        }
+
         void Update()
         {
             if (Time.timeScale == 0f) return;        // paused (e.g. trading menu open)

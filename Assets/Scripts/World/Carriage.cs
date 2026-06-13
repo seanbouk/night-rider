@@ -28,6 +28,19 @@ namespace NightRider.World
         public float minGap = 2f;
         public float heightOffset = 0.4f;
 
+        // Snap the transform onto the lane at the current t RIGHT NOW. Called by the
+        // spawner the instant after creation so the carriage is never left sitting at
+        // the world origin for a frame (where the despawn-behind cull would kill it).
+        public void PlaceOnLane()
+        {
+            if (lane == null || !lane.IsValid) return;
+            lane.EvaluateWorld(t, out var pos, out var fwd, out _);
+            transform.position = pos + Vector3.up * heightOffset;
+            Vector3 flat = Vector3.ProjectOnPlane(fwd, Vector3.up);
+            if (flat.sqrMagnitude > 1e-6f)
+                transform.rotation = Quaternion.LookRotation(flat.normalized, Vector3.up);
+        }
+
         [Header("Energy")]
         [Range(0f, 1f), Tooltip("Runtime energy. Rider rear-ends reduce it; 0 = wrecked.")]
         public float energy = 1f;

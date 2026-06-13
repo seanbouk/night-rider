@@ -32,6 +32,8 @@ namespace NightRider.World
         public float maxInterval = 3.5f;
         [Min(0), Tooltip("Carriages to pre-seed across the road ahead at start (avoids a barren opening).")]
         public int seedCount = 4;
+        [Tooltip("Log each spawn attempt and why it did/didn't produce a carriage (to debug long gaps).")]
+        public bool logSpawns = false;
 
         [Header("Placement")]
         [Min(1f), Tooltip("How far ahead of the rider (along the lane) to spawn.")]
@@ -112,11 +114,14 @@ namespace NightRider.World
             if (Time.time >= _nextSpawn)
             {
                 ScheduleNext();
-                if (_spawned.Count < maxCarriages) TrySpawnOne();
+                if (_spawned.Count >= maxCarriages) Log($"skip: at cap ({_spawned.Count}/{maxCarriages})");
+                else TrySpawnOne();
             }
         }
 
         void ScheduleNext() => _nextSpawn = Time.time + Random.Range(minInterval, Mathf.Max(minInterval, maxInterval));
+
+        void Log(string msg) { if (logSpawns) Debug.Log($"[Carriages] {msg}", this); }
 
         void Despawn()
         {
@@ -126,8 +131,10 @@ namespace NightRider.World
             {
                 var c = _spawned[i];
                 if (c == null) { _spawned.RemoveAt(i); continue; }
-                if (Vector3.Dot(c.transform.position - camPos, camFwd) < -despawnBehind)
+                float ahead = Vector3.Dot(c.transform.position - camPos, camFwd);
+                if (ahead < -despawnBehind)
                 {
+                    Log($"despawned: {ahead:F0}m along cam-fwd (cull < {-despawnBehind})");
                     _spawned.RemoveAt(i);
                     Destroy(c.gameObject);
                 }
@@ -141,17 +148,19 @@ namespace NightRider.World
         {
             _cands.Clear();
             var here = rider.lane;
-            if (here == null || !here.IsValid) return;
+            if (here == null || !here.IsValid) { Log("skip: rider has no valid lane"); return; }
 
-            if (!PostAhead(here, rider.t)) _cands.Add((here, rider.t));
+            if (PostAhead(here, rider.t)) Log($"  current '{here.name}': post ahead -> excluded");
+            else _cands.Add((here, rider.t));
 
             here.EvaluateWorld(rider.t, out var rpos, out _, out _);
             for (int side = -1; side <= 1; side += 2)
             {
                 if (network == null || !network.TryGetNeighbor(here, rider.t, side, out var nb) || nb == null || !nb.IsValid)
-                    continue;
+                { Log($"  side {side}: no neighbour"); continue; }
                 float baseT = nb.ProjectWorldPoint(rpos, out _);
-                if (!PostAhead(nb, baseT)) _cands.Add((nb, baseT));
+                if (PostAhead(nb, baseT)) Log($"  side {side} '{nb.name}': post ahead -> excluded");
+                else _cands.Add((nb, baseT));
             }
         }
 
@@ -160,14 +169,21 @@ namespace NightRider.World
         void TrySpawnOne()
         {
             GatherCandidates();
-            if (_cands.Count == 0) return;
+            if (_cands.Count == 0) { Log("skip: no suitable lane (current + neighbours excluded/absent)"); return; }
 
             int start = Random.Range(0, _cands.Count);
             for (int k = 0; k < _cands.Count; k++)
             {
-                var (lane, baseT) = _cands[(start + k) % _cands.Count];
-                if (TrySpawnAhead(lane, baseT, spawnAhead + Random.Range(-spawnAheadJitter, spawnAheadJitter))) return;
+                var (lane, _) = _cands[(start + k) % _cands.Count];
+                float ahead = spawnAhead + Random.Range(-spawnAheadJitter, spawnAheadJitter);
+                if (TrySpawnAhead(lane, ahead))
+                {
+                    float fwd = view != null ? Vector3.Dot(_spawned[_spawned.Count - 1].transform.position - view.position, view.forward) : 0f;
+                    Log($"spawned on '{lane.name}' (+{ahead:F0}m along lane), but {fwd:F0}m along cam-fwd, now {_spawned.Count}/{maxCarriages}");
+                    return;
+                }
             }
+            Log("skip: all candidate spots occupied / off-lane");
         }
 
         // Pre-seed the visible road so the opening isn't empty: a spread of carriages
@@ -178,22 +194,35 @@ namespace NightRider.World
             {
                 GatherCandidates();
                 if (_cands.Count == 0) break;
-                var (lane, baseT) = _cands[Random.Range(0, _cands.Count)];
+                var (lane, _) = _cands[Random.Range(0, _cands.Count)];
                 float ahead = Mathf.Lerp(spawnAhead * 0.25f, spawnAhead, (i + 0.5f) / Mathf.Max(1, seedCount));
-                TrySpawnAhead(lane, baseT, ahead + Random.Range(-spawnAheadJitter, spawnAheadJitter));
+                TrySpawnAhead(lane, ahead + Random.Range(-spawnAheadJitter, spawnAheadJitter));
             }
         }
 
-        bool TrySpawnAhead(Lane lane, float baseT, float ahead)
+        // Place a point `ahead` metres in front of the rider (world space) and snap it
+        // onto the lane. Robust to spline t-parameterisation/direction — the spawn is
+        // always genuinely ahead in view, never behind (which the lane-t maths could do
+        // on bends). Skips if the snapped point isn't actually ahead (loops/sharp curves).
+        bool TrySpawnAhead(Lane lane, float ahead)
         {
-            float len = lane.Length;
-            if (len < 0.0001f) return false;
+            if (rider == null || lane.Length < 0.0001f) return false;
 
-            float t = baseT + ahead / len;
-            if (lane.Closed) t -= Mathf.Floor(t);
-            else if (t < 0f || t > 1f) return false;
+            Vector3 from = rider.transform.position;
+            Vector3 fwd  = rider.transform.forward;
+            float t = lane.ProjectWorldPoint(from + fwd * ahead, out var nearest);
 
-            if (Carriage.Occupied(lane, t, occupyClearance)) return false;
+            float realAhead = Vector3.Dot(nearest - from, fwd);
+            if (realAhead < ahead * 0.25f)
+            {
+                Log($"  '{lane.name}': snapped point only {realAhead:F0}m ahead (wanted ~{ahead:F0}) -> skip");
+                return false;
+            }
+            if (Carriage.Occupied(lane, t, occupyClearance))
+            {
+                Log($"  '{lane.name}' t={t:F2}: occupied (within {occupyClearance}m)");
+                return false;
+            }
 
             Spawn(lane, t);
             return true;
@@ -233,6 +262,13 @@ namespace NightRider.World
             car.acceleration = acceleration;
             car.wreckBrake = wreckBrake;
             car.heightOffset = heightOffset;
+
+            // Place it on the lane NOW. Otherwise the GameObject stays at the world
+            // origin until Carriage.Update() runs (a frame later), and Despawn() —
+            // which runs at the top of our Update — would cull it for being "behind"
+            // the camera (origin reads as hundreds of metres back once the rider has
+            // driven away from it). That was the cause of the long empty stretches.
+            car.PlaceOnLane();
 
             var vis = new GameObject("Visual");
             vis.transform.SetParent(go.transform, false);
