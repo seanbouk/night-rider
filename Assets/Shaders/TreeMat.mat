@@ -35,7 +35,7 @@ Material:
     m_Floats:
     - _Cutoff: 0.5
     m_Colors:
-    - _LeafColor: {r: 0, g: 0.23312998, b: 1, a: 1}
-    - _WoodColor: {r: 0.10239408, g: 0.10383322, b: 0.122641504, a: 1}
+    - _LeafColor: {r: 0, g: 0.23312995, b: 1, a: 1}
+    - _WoodColor: {r: 0.10239405, g: 0.10383319, b: 0.12264148, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
