@@ -1892,6 +1892,7 @@ GameObject:
   m_Component:
   - component: {fileID: 336980723}
   - component: {fileID: 336980722}
+  - component: {fileID: 336980724}
   m_Layer: 0
   m_Name: PriceMap
   m_TagString: Untagged
@@ -1961,6 +1962,48 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &336980724
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 336980721}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b409518719c38304d8ee2131accc2fef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NightRider.World.WorldPalette
+  priceMap: {fileID: 336980722}
+  reference: {fileID: 1220619578}
+  sky: {fileID: 330585549}
+  treeMaterial: {fileID: 2100000, guid: 7eeeed5e1b0117ad09cab01dface5678, type: 2}
+  roadMaterial: {fileID: 2100000, guid: d6c796394f2967847a308f3b5abdb559, type: 2}
+  bindings:
+  - element: 2
+    good: 0
+    cheap: {r: 0.023529412, g: 0.17827909, b: 0.27450982, a: 1}
+    dear: {r: 0.8254717, g: 0.99492556, b: 1, a: 1}
+  - element: 4
+    good: 1
+    cheap: {r: 0.4339623, g: 0.32893363, b: 0.25996798, a: 1}
+    dear: {r: 0.06323426, g: 0.46226418, b: 0.12573288, a: 1}
+  - element: 5
+    good: 2
+    cheap: {r: 0.3490566, g: 0.34623405, b: 0.34411713, a: 1}
+    dear: {r: 0.7264151, g: 0.50794137, b: 0.17475079, a: 1}
+  - element: 1
+    good: 3
+    cheap: {r: 0.04579032, g: 0.28260434, b: 0.46226418, a: 1}
+    dear: {r: 0.8867924, g: 0.8867924, b: 0.8867924, a: 1}
+  - element: 0
+    good: 4
+    cheap: {r: 0.28695822, g: 0.016197944, b: 0.49056602, a: 1}
+    dear: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  - element: 3
+    good: 5
+    cheap: {r: 0.01744394, g: 0.19104461, b: 0.5283019, a: 1}
+    dear: {r: 0.6320754, g: 0.44798046, b: 0.056648254, a: 1}
 --- !u!43 &348518920
 Mesh:
   m_ObjectHideFlags: 0

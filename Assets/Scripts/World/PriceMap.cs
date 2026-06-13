@@ -67,6 +67,16 @@ namespace NightRider.World
             return Mathf.Lerp(g.min, g.max, Mathf.Clamp01(n));
         }
 
+        // Normalized 0..1 field value for a good at a world position (what the
+        // heatmap shows). 0 = cheapest, 1 = dearest. Drives WorldPalette.
+        public float Normalized(ItemType t, Vector3 world)
+        {
+            var g = Find(t);
+            if (g == null) return 0f;
+            return Mathf.Clamp01(Mathf.PerlinNoise(world.x * g.noiseScale + g.offset.x,
+                                                   world.z * g.noiseScale + g.offset.y));
+        }
+
         public int BuyPrice(ItemType t, Vector3 world)  => RoundNice(BasePrice(t, world));
         public int SellPrice(ItemType t, Vector3 world) => RoundNice(BasePrice(t, world) * (1f - marketCut));
 
