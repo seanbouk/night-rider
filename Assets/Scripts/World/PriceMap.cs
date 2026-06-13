@@ -17,7 +17,7 @@ namespace NightRider.World
     public class GoodPrice
     {
         public ItemType type;
-        [LogRange(0.001f, 0.01f), Tooltip("Noise frequency (log slider). Smaller = larger, smoother price regions.")]
+        [LogRange(0.0001f, 0.01f), Tooltip("Noise frequency (log slider). Smaller = larger, smoother price regions.")]
         public float noiseScale = 0.004f;
         [Tooltip("Shifts the noise (per-good 'seed').")]
         public Vector2 offset;
