@@ -37,8 +37,17 @@ namespace NightRider.World
     public class PlayerState : MonoBehaviour
     {
         public int gold = 200;
-        [Tooltip("Display name of the current level (you'll never see the number).")]
+        [Tooltip("Display name of the current level (you'll never see the number). " +
+                 "Driven by heads collected via SetRank — set in the Inspector only to preview.")]
         public string level = "Harmless";
+
+        [Tooltip("Rank titles by number of heads collected (index 0 = none). " +
+                 "The last entry is the cap once you run past the table.")]
+        public string[] ranks =
+        {
+            "Harmless", "Highwayman", "Turnpikeman",
+            "Restless", "Appirator", "Phantom", "Elite",
+        };
 
         [Tooltip("Six stacks: col A = first three, col B = last three.")]
         public List<ItemStack> items = new();
@@ -59,6 +68,14 @@ namespace NightRider.World
                 new() { type = ItemType.Relics, emoji = "🏺", name = "Relics", count = 0 },
                 new() { type = ItemType.Heads,  emoji = "💀", name = "Heads",  count = 0 },
             };
+        }
+
+        // Set the displayed rank from how many heads have been collected
+        // (clamped to the table). Called whenever a head is bought.
+        public void SetRank(int headsCollected)
+        {
+            if (ranks == null || ranks.Length == 0) return;
+            level = ranks[Mathf.Clamp(headsCollected, 0, ranks.Length - 1)];
         }
 
         // Add (or remove) count for an item type. No-op if the type isn't present.

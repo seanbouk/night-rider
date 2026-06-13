@@ -144,7 +144,11 @@ namespace NightRider.View
                 player.Add(player.items[i].type, _delta[i]);
             }
             System.Array.Clear(_delta, 0, _delta.Length);
-            if (boughtHead) MusicDirector.Instance.Acquire(_post);   // switch to this head + its track
+            if (boughtHead)
+            {
+                MusicDirector.Instance.Acquire(_post);               // switch to this head + its track
+                player.SetRank(MusicDirector.Instance.HeadCount);    // promote rank by heads collected
+            }
             return true;
         }
 

@@ -50,6 +50,9 @@ namespace NightRider.View
 
         public TradingPost CurrentHead => (_index < 0 || _index >= _heads.Count) ? null : _heads[_index];
 
+        // How many distinct heads have been collected (drives the player's rank).
+        public int HeadCount => _heads.Count;
+
         // 32x32 head sprite for the HUD: the collected head, or the default-head image
         // on the no-head slot (null only if neither is assigned).
         public Sprite CurrentHeadSprite
