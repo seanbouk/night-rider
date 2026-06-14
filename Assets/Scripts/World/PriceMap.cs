@@ -29,6 +29,11 @@ namespace NightRider.World
     {
         public List<GoodPrice> goods = new();
 
+        [Range(1f, 8f), Tooltip("Amplify the price contrast across ALL goods at once. Perlin noise " +
+                 "clusters near the middle; this pushes values away from mid (0.5) toward the cheap/dear " +
+                 "extremes, so regions read clearly. 1 = raw noise. Drives prices, the world tint, and the heatmap.")]
+        public float contrast = 1f;
+
         [Range(0f, 0.9f), Tooltip("Sell = buy x (1 - cut). The trader's cut, taken on selling.")]
         public float marketCut = 0.1f;
 
@@ -57,14 +62,22 @@ namespace NightRider.World
             return null;
         }
 
+        // Normalized 0..1 field value for a good at a world XZ position, with the
+        // global contrast applied (gain around the 0.5 mid). The single source of
+        // truth for prices, the world tint, and the scene heatmap.
+        float Field(GoodPrice g, float wx, float wz)
+        {
+            float n = Mathf.PerlinNoise(wx * g.noiseScale + g.offset.x,
+                                        wz * g.noiseScale + g.offset.y);
+            return Mathf.Clamp01(0.5f + (n - 0.5f) * contrast);
+        }
+
         // Base market price for a good at a world position (the buy price, pre-round).
         public float BasePrice(ItemType t, Vector3 world)
         {
             var g = Find(t);
             if (g == null) return 0f;
-            float n = Mathf.PerlinNoise(world.x * g.noiseScale + g.offset.x,
-                                        world.z * g.noiseScale + g.offset.y);
-            return Mathf.Lerp(g.min, g.max, Mathf.Clamp01(n));
+            return Mathf.Lerp(g.min, g.max, Field(g, world.x, world.z));
         }
 
         // Normalized 0..1 field value for a good at a world position (what the
@@ -73,8 +86,7 @@ namespace NightRider.World
         {
             var g = Find(t);
             if (g == null) return 0f;
-            return Mathf.Clamp01(Mathf.PerlinNoise(world.x * g.noiseScale + g.offset.x,
-                                                   world.z * g.noiseScale + g.offset.y));
+            return Field(g, world.x, world.z);
         }
 
         public int BuyPrice(ItemType t, Vector3 world)  => RoundNice(BasePrice(t, world));
@@ -87,6 +99,12 @@ namespace NightRider.World
             if (v < 100f) return Mathf.RoundToInt(v / 5f) * 5;
             return Mathf.RoundToInt(v / 10f) * 10;
         }
+
+#if UNITY_EDITOR
+        // Repaint the Scene view as the inspector changes (e.g. dragging the
+        // contrast slider), so the heatmap gizmo tracks live.
+        void OnValidate() => UnityEditor.SceneView.RepaintAll();
+#endif
 
         // Heatmap window comes from the transform: position = centre (Move tool),
         // X/Z scale = size (Scale tool), Y = draw height.
@@ -110,8 +128,7 @@ namespace NightRider.World
             {
                 float wx = x0 + (i + 0.5f) * cellX;
                 float wz = z0 + (j + 0.5f) * cellZ;
-                float n = Mathf.Clamp01(Mathf.PerlinNoise(wx * g.noiseScale + g.offset.x,
-                                                          wz * g.noiseScale + g.offset.y));
+                float n = Field(g, wx, wz);
                 Gizmos.color = new Color(n, 0.15f, 1f - n, 0.5f);   // cheap=blue, dear=red
                 Gizmos.DrawCube(new Vector3(wx, c.y, wz), size);
             }
